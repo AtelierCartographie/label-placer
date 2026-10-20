@@ -19,12 +19,13 @@
   "sideEffects": false,
   "scripts": {
     "dev": "vite serve demo",
-    "build": "tsc --noEmit && vite build && tsc --declaration --emitDeclarationOnly",
+    "build": "tsc --noEmit && vite build && tsc --declaration --emitDeclarationOnly && node scripts/fix-dts-extensions.mjs",
     "test": "vitest run",
     "bench": "node bench/run.ts",
     "release:patch": "npm version patch && git push && git push --tags",
     "release:minor": "npm version minor && git push && git push --tags",
-    "release:major": "npm version major && git push && git push --tags"
+    "release:major": "npm version major && git push && git push --tags",
+    "prepare": "vite build && tsc --declaration --emitDeclarationOnly && node scripts/fix-dts-extensions.mjs"
   },
   "keywords": [
     "label",
