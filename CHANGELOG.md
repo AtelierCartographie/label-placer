@@ -1,0 +1,18 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- `placeLabels()`: greedy placement by mode and priority over ordered candidate positions, then ejection chains under a deterministic work budget
+- Candidates inside a symbol, centered on an area, around circle and rectangle symbols, and on farther rings with a leader line
+- Static obstacles rasterized into summed-area tables, hard or soft; label symbols as obstacles with a size threshold
+- `pinned`, `required` and `optional` modes, and sticky placements through `previous`
+- `leaderGeometry()`: octilinear or straight leaders with a symbol buffer and a minimum gap
+- `flushAlignment()`: text flushed towards its feature
+- Benchmark on French communes
