@@ -1,0 +1,56 @@
+{
+  "name": "@ateliercartographie/label-placer",
+  "version": "0.0.0",
+  "description": "Render-agnostic automatic label placement for maps and charts: ordered candidate positions, priorities, obstacles, leader lines, pinned labels",
+  "type": "module",
+  "main": "./dist/label-placer.cjs",
+  "module": "./dist/label-placer.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/label-placer.js",
+      "require": "./dist/label-placer.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "dev": "vite serve demo",
+    "build": "tsc --noEmit && vite build && tsc --declaration --emitDeclarationOnly",
+    "test": "vitest run",
+    "bench": "node bench/run.ts",
+    "release:patch": "npm version patch && git push && git push --tags",
+    "release:minor": "npm version minor && git push && git push --tags",
+    "release:major": "npm version major && git push && git push --tags"
+  },
+  "keywords": [
+    "label",
+    "label-placement",
+    "labeling",
+    "leader-line",
+    "callout",
+    "collision",
+    "cartography",
+    "map",
+    "dataviz"
+  ],
+  "author": "Atelier de cartographie de Sciences Po",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AtelierCartographie/label-placer"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "packageManager": "pnpm@10.17.1",
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4"
+  }
+}
