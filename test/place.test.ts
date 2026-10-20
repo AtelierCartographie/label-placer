@@ -138,6 +138,30 @@ describe('placeLabels', () => {
     expect(alone.labels[0].ring).toBe(0);
   });
 
+  it('flushes corner labels sideways despite rounding', () => {
+    for (const radius of [7, 23, 24, 31.7]) {
+      const r = placeLabels(
+        [
+          { x: 100, y: 100, width: 40, height: 12, symbol: { type: 'circle', radius } },
+          { x: 300, y: 100, width: 40, height: 12, symbol: { type: 'circle', radius } }
+        ],
+        { bounds: [0, 0, 400, 200], inside: false, positions: ['top-right'] }
+      );
+      const left = placeLabels(r.labels.map((_, i) => ({ x: 100 + i * 200, y: 100, width: 40, height: 12, symbol: { type: 'circle' as const, radius } })), {
+        bounds: [0, 0, 400, 200],
+        inside: false,
+        positions: ['bottom-left']
+      });
+      expect(r.labels.map((l) => l.textAnchor)).toEqual(['start', 'start']);
+      expect(left.labels.map((l) => l.textAnchor)).toEqual(['end', 'end']);
+    }
+  });
+
+  it('keeps leaders inside the bounds', () => {
+    for (const l of visible(result.labels))
+      for (const [x, y] of l.leader ?? []) expect(x >= 0 && y >= 0 && x <= 600 && y <= 400).toBe(true);
+  });
+
   it('places more labels with ejection chains than greedily, without losing higher ones', () => {
     const greedy = placeLabels(labels, { ...options, optimize: 'none' });
     expect(result.stats.placed).toBeGreaterThanOrEqual(greedy.stats.placed);

@@ -37,7 +37,9 @@ function gaps([cx, cy]: Point, [hw, hh]: Point): { horizontal: number; vertical:
 export function flushAlignment(anchor: Point, box: Box): TextAnchor {
   const [center, half] = relative(anchor, box);
   const g = gaps(center, half);
-  if (g.horizontal === 0 || g.horizontal < g.vertical) return 'middle';
+  // Corner placements have equal gaps up to rounding: they stay flushed sideways.
+  const tolerance = 1e-9 * Math.max(1, g.vertical);
+  if (g.horizontal === 0 || g.horizontal < g.vertical - tolerance) return 'middle';
   return center[0] > 0 ? 'start' : 'end';
 }
 

@@ -130,7 +130,7 @@ export class Placer {
       const ko: Candidate[] = [];
       for (const c of buildCandidates(l, settings)) {
         const box: Box = [c.x0, c.y0, c.x1, c.y1];
-        const outside = c.x0 < bx0 || c.y0 < by0 || c.x1 > bx1 || c.y1 > by1;
+        const outside = c.bx0 < bx0 || c.by0 < by0 || c.bx1 > bx1 || c.by1 > by1;
         const own = c.placement === 'inside' && ownHard ? raster.cellCount(box) : 0;
         const hit =
           hardRects.some((r) => boxesOverlap(c.x0, c.y0, c.x1, c.y1, r[0], r[1], r[2], r[3])) ||
@@ -185,6 +185,11 @@ export class Placer {
           }
         }
     return out;
+  }
+
+  /** Pinned, forced and sticky labels stay where they are while chains run. */
+  private isMovable(i: number): boolean {
+    return this.mode(i) !== 'pinned' && !this.forced.has(i) && !this.sticky.has(i);
   }
 
   private isFree(i: number, c: Candidate): boolean {
@@ -263,7 +268,7 @@ export class Placer {
           if (stop()) return;
           const blockers = this.conflicts(i, c, CHAIN_MAX_EJECT + 1);
           if (blockers.length > CHAIN_MAX_EJECT) continue;
-          if (blockers.some((b) => this.mode(b) === 'pinned' || this.forced.has(b))) continue;
+          if (blockers.some((b) => !this.isMovable(b))) continue;
           this.journal = new Map();
           for (const b of blockers) this.unplace(b);
           this.place(i, c);
@@ -304,7 +309,7 @@ export class Placer {
       const blockers = this.conflicts(j, c, 2);
       if (blockers.length !== 1) continue;
       const k = blockers[0];
-      if (this.mode(k) === 'pinned' || this.forced.has(k)) continue;
+      if (!this.isMovable(k)) continue;
       const kc = this.current[k]!;
       this.unplace(k);
       this.place(j, c);
