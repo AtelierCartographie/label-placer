@@ -162,6 +162,59 @@ describe('placeLabels', () => {
       for (const [x, y] of l.leader ?? []) expect(x >= 0 && y >= 0 && x <= 600 && y <= 400).toBe(true);
   });
 
+  it('gives a required label that cannot avoid a hard obstacle the spot that covers the least of it', () => {
+    const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, mode: 'required' };
+    // The cheaper spot on the right lies on a large obstacle; the one on the left only grazes one.
+    const obstacles: PlaceOptions['obstacles'] = [
+      { type: 'rect', box: [100, 90, 150, 110] },
+      { type: 'rect', box: [58, 95, 60, 97] }
+    ];
+    const r = placeLabels([label], { bounds: [0, 0, 200, 200], obstacles, positions: ['right', 'left'], leader: false });
+    expect(r.labels[0].placement).toBe('left');
+    expect(r.labels[0].overlapping).toBe(true);
+  });
+
+  it('counts a leader across a hard symbol against a required label before its overlaps with labels', () => {
+    const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 }, mode: 'required' };
+    const pins: LabelInput[] = [
+      // Right next to the symbol, clear of the leaders.
+      { x: 106.5, y: 104, width: 3, height: 2, mode: 'pinned' },
+      // Under every box on the left.
+      { x: 65, y: 100, width: 10, height: 10, mode: 'pinned' }
+    ];
+    const r = placeLabels([label, ...pins], {
+      bounds: [0, 0, 200, 200],
+      // A symbol on the way of every leader to the right, a corner of an obstacle under every box on the left.
+      obstacles: [
+        { type: 'circle', x: 110, y: 100, radius: 3.5 },
+        { type: 'rect', box: [55, 95, 57, 97] }
+      ],
+      inside: false,
+      positions: ['right', 'left'],
+      leader: { rings: [10] }
+    });
+    expect(r.labels[0].placement).toBe('left');
+    expect(r.labels[0].overlapping).toBe(true);
+  });
+
+  it('tries one farther leader ring for required labels only', () => {
+    const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 } };
+    const options: PlaceOptions = {
+      bounds: [0, 0, 200, 200],
+      // Block the boxes next to the symbol and on the first two rings, not the leaders.
+      obstacles: [
+        { type: 'rect', box: [110, 95, 120, 97] },
+        { type: 'rect', box: [125, 103, 130, 105] }
+      ],
+      inside: false,
+      positions: ['right']
+    };
+    const required = placeLabels([{ ...label, mode: 'required' }], options).labels[0];
+    expect(required.ring).toBe(3);
+    expect(required.overlapping).toBe(false);
+    expect(placeLabels([label], options).labels[0].visible).toBe(false);
+  });
+
   it('places more labels with ejection chains than greedily, without losing higher ones', () => {
     const greedy = placeLabels(labels, { ...options, optimize: 'none' });
     expect(result.stats.placed).toBeGreaterThanOrEqual(greedy.stats.placed);

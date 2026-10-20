@@ -59,6 +59,8 @@ Labels are placed by mode, then by decreasing `priority`:
 | ---------- | --------------------------------------------------------------------------------------------------- |
 | `pinned`   | Placed at `offset` (center of the box relative to the anchor), never moved. An obstacle for others. |
 | `required` | Always shown. Moved or given a leader when needed; overlaps only as a last resort (`overlapping`).  |
+
+A `required` label with no free candidate tries one more leader ring, a label height beyond the last one (3h by default). When that fails too, it overlaps: it takes the spot that covers the least of the hard obstacles (under the box, along the leader, out of the bounds), then the one that overlaps the fewest labels, then the cheapest.
 | `optional` | Hidden when no candidate is free. The default.                                                      |
 
 The optimizer never hides a label to show one of lower or equal priority.
@@ -76,7 +78,7 @@ A candidate blocked by a hard obstacle or outside the bounds is discarded. A sof
 
 ### Symbols as obstacles
 
-Every label's symbol is an obstacle for the other labels. Symbols at least `symbolObstacles.hardMinRadius` large (default a quarter of a label height) block. Smaller ones only add `symbolObstacles.softCost` per label-height² covered. Making every tiny dot a hard obstacle leaves the largest features of a dense map without a label.
+Every label's symbol is an obstacle for the other labels. Symbols at least `symbolObstacles.hardMinRadius` large (default a quarter of a label height) block. Smaller ones only add `symbolObstacles.softCost` per label-height² covered. Making every tiny dot a hard obstacle leaves the largest features of a dense map without a label. A symbol smaller than a raster cell still counts in the cell it sits in.
 
 ### Leader lines
 
@@ -87,7 +89,7 @@ Every label's symbol is an obstacle for the other labels. Symbols at least `symb
 - `octilinear` (default): a 45° leg out of the symbol, then a horizontal leg into the middle of the facing side, or a vertical leg into the top or bottom edge. Every segment is horizontal, vertical or diagonal.
 - `straight`: a single segment to the same port.
 
-A leader never crosses another label, another leader, or a hard obstacle. Restrict leaders to the labels that deserve them with `leader: false` on the others.
+A leader never crosses another label, another leader, or a hard obstacle, except for a `required` label left with no other way. Restrict leaders to the labels that deserve them with `leader: false` on the others.
 
 ### Budget and determinism
 
@@ -191,10 +193,10 @@ Inspirations, none of whose code is reused: Imhof's position preferences; Christ
 | ------------------------------------ | -------------- | ------ | ------ | -------------- | --------------- |
 | Bretagne, 1,202 communes             | greedy         | 12 ms  | 377    | 82 %           | 35.8 %          |
 |                                      | ejection chains| 18 ms  | 402    | 84 %           | 38.3 %          |
-| Grand Est + BFC + IdF, 10,066        | greedy         | 39 ms  | 399    | 28 %           | 25.7 %          |
-|                                      | ejection chains| 87 ms  | 419    | 28 %           | 27.7 %          |
-| France, 34,734                       | greedy         | 89 ms  | 404    | 56 %           | 26.2 %          |
-|                                      | ejection chains| 320 ms | 441    | 56 %           | 29.0 %          |
+| Grand Est + BFC + IdF, 10,066        | greedy         | 39 ms  | 397    | 28 %           | 26.2 %          |
+|                                      | ejection chains| 87 ms  | 412    | 28 %           | 28.0 %          |
+| France, 34,734                       | greedy         | 89 ms  | 407    | 56 %           | 26.2 %          |
+|                                      | ejection chains| 320 ms | 447    | 56 %           | 28.6 %          |
 
 The top 100 of the larger scenarios is capped by the Paris area, where the largest communes are too close together for 9 px labels on an A4 page.
 

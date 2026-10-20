@@ -12,6 +12,12 @@ export interface Candidate {
   textAnchor: TextAnchor;
   baseline: 'top' | 'middle' | 'bottom';
   leader: Point[] | null;
+  /**
+   * Static hard coverage of a blocked candidate, as an area: hard obstacles under the box,
+   * a strip one label height wide along the leader where it crosses one, the box out of
+   * bounds. Zero for a clean candidate.
+   */
+  hard: number;
   /** Bounding box of the label box and its leader. */
   bx0: number;
   by0: number;
@@ -65,7 +71,7 @@ export function makeCandidate(
       bx1 = Math.max(bx1, x);
       by1 = Math.max(by1, y);
     }
-  return { x0: box[0], y0: box[1], x1: box[2], y1: box[3], cost, placement, ring, textAnchor, baseline, leader, bx0, by0, bx1, by1 };
+  return { x0: box[0], y0: box[1], x1: box[2], y1: box[3], cost, placement, ring, textAnchor, baseline, leader, hard: 0, bx0, by0, bx1, by1 };
 }
 
 /** Candidates of a movable label, sorted by cost. */

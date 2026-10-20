@@ -31,6 +31,13 @@ function candidatesConflict(a: Candidate, b: Candidate): boolean {
   return false;
 }
 
+/** Area of the box outside the bounds. */
+function areaOutside([x0, y0, x1, y1]: Box, [bx0, by0, bx1, by1]: Box): number {
+  const w = Math.max(0, Math.min(x1, bx1) - Math.max(x0, bx0));
+  const h = Math.max(0, Math.min(y1, by1) - Math.max(y0, by0));
+  return (x1 - x0) * (y1 - y0) - w * h;
+}
+
 function leaderHitsBox(leader: Point[], c: Candidate): boolean {
   for (let i = 1; i < leader.length; i++) {
     const [p, q] = [leader[i - 1], leader[i]];
@@ -44,6 +51,8 @@ export class Placer {
   readonly current: (Candidate | null)[];
   /** Movable labels: candidates clear of static obstacles. Pinned labels: their single candidate. */
   private readonly feasible: Candidate[][] = [];
+  /** Required labels: clean candidates on one more leader ring, tried when the others are taken. */
+  private readonly farther: Candidate[][] = [];
   /** Candidates blocked by static obstacles, kept as a last resort for required labels. */
   private readonly blocked: Candidate[][] = [];
   private readonly order: number[];
@@ -110,6 +119,7 @@ export class Placer {
       const l = labels[i];
       if (!(l.width > 0 && l.height > 0)) {
         this.feasible.push([]);
+        this.farther.push([]);
         this.blocked.push([]);
         continue;
       }
@@ -122,25 +132,32 @@ export class Placer {
           ? leaderGeometry({ anchor: [l.x, l.y], symbol: l.symbol, box, style: settings.leaderStyle, symbolGap: settings.symbolGap, minGap: settings.minGap })
           : null;
         this.feasible.push([makeCandidate(box, 0, 'pinned', 0, flushAlignment([l.x, l.y], box), 'middle', lead)]);
+        this.farther.push([]);
         this.blocked.push([]);
         continue;
       }
       const ownHard = this.ownHardCoverage(l, hardMin);
+      const rings = l.mode === 'required' && settings.rings.length ? [...settings.rings, Math.max(...settings.rings) + unit] : settings.rings;
       const ok: Candidate[] = [];
+      const far: Candidate[] = [];
       const ko: Candidate[] = [];
-      for (const c of buildCandidates(l, settings)) {
+      for (const c of buildCandidates(l, { ...settings, rings })) {
         const box: Box = [c.x0, c.y0, c.x1, c.y1];
         const outside = c.bx0 < bx0 || c.by0 < by0 || c.bx1 > bx1 || c.by1 > by1;
         const own = c.placement === 'inside' && ownHard ? raster.cellCount(box) : 0;
-        const hit =
-          hardRects.some((r) => boxesOverlap(c.x0, c.y0, c.x1, c.y1, r[0], r[1], r[2], r[3])) ||
-          raster.hardCoverage(box) - own > 0 ||
-          (c.leader !== null && c.leader.some((p, k) => k > 0 && raster.segmentHitsHard(c.leader![k - 1][0], c.leader![k - 1][1], p[0], p[1])));
+        const coverage = raster.hardCoverage(box) - own;
+        let crossed = 0;
+        for (let k = 1; k < (c.leader?.length ?? 0); k++) crossed += raster.hardLength(...c.leader![k - 1], ...c.leader![k]);
+        const hit = hardRects.some((r) => boxesOverlap(c.x0, c.y0, c.x1, c.y1, r[0], r[1], r[2], r[3])) || coverage > 0 || crossed > 0;
         if (softCost > 0) c.cost += (softCost * raster.softArea(box)) / (unit * unit);
-        (outside || hit ? ko : ok).push(c);
+        if (outside || hit) {
+          c.hard = coverage / (resolution * resolution) + crossed * unit + areaOutside(box, options.bounds);
+          ko.push(c);
+        } else (c.ring > settings.rings.length ? far : ok).push(c);
       }
       ok.sort((a, b) => a.cost - b.cost);
       this.feasible.push(ok);
+      this.farther.push(far);
       this.blocked.push(ko);
     }
 
@@ -233,21 +250,28 @@ export class Placer {
       }
       if (!chosen) chosen = list.find((c) => this.isFree(i, c)) ?? null;
       if (!chosen && this.mode(i) === 'required') {
-        let best = Infinity;
-        for (const pool of [list, this.blocked[i]]) {
-          for (const c of pool) {
-            const score = this.conflicts(i, c).length * 1000 + c.cost;
-            if (score < best) {
-              best = score;
-              chosen = c;
-            }
-          }
-          if (chosen) break;
+        chosen = this.farther[i].find((c) => this.isFree(i, c)) ?? null;
+        if (!chosen) {
+          chosen = this.leastBad(i, [...list, ...this.farther[i]]) ?? this.leastBad(i, this.blocked[i]);
+          if (chosen) this.forced.add(i);
         }
-        if (chosen) this.forced.add(i);
       }
       if (chosen) this.place(i, chosen);
     }
+  }
+
+  /** Last resort of a required label: least static hard coverage, then fewest labels overlapped, then lowest cost. */
+  private leastBad(i: number, pool: Candidate[]): Candidate | null {
+    let best: Candidate | null = null;
+    let bestOverlaps = 0;
+    for (const c of pool) {
+      const overlaps = this.conflicts(i, c).length;
+      if (!best || (c.hard - best.hard || overlaps - bestOverlaps || c.cost - best.cost) < 0) {
+        best = c;
+        bestOverlaps = overlaps;
+      }
+    }
+    return best;
   }
 
   /**
@@ -327,8 +351,10 @@ export class Placer {
       const cur = this.current[i];
       if (!cur || this.mode(i) === 'pinned' || this.forced.has(i)) continue;
       if (this.sticky.has(i) && candidateKey(cur) === this.previous?.[i]) continue;
+      // A required label on the farther ring takes any free candidate closer in.
+      const bound = this.farther[i].includes(cur) ? Infinity : cur.cost;
       for (const c of this.feasible[i]) {
-        if (c.cost >= cur.cost) break;
+        if (c.cost >= bound) break;
         if (this.isFree(i, c)) {
           this.place(i, c);
           break;

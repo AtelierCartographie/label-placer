@@ -36,13 +36,21 @@ export class ObstacleRaster {
     const j1 = Math.min(H - 1, Math.ceil(py + pr));
     const i0 = Math.max(0, Math.floor(px - pr));
     const i1 = Math.min(W - 1, Math.ceil(px + pr));
+    let marked = false;
     for (let j = j0; j <= j1; j++) {
       const dy = j + 0.5 - py;
       for (let i = i0; i <= i1; i++) {
         const dx = i + 0.5 - px;
-        if (dx * dx + dy * dy <= pr * pr && target[j * W + i] < 65535) target[j * W + i]++;
+        if (dx * dx + dy * dy <= pr * pr) {
+          marked = true;
+          if (target[j * W + i] < 65535) target[j * W + i]++;
+        }
       }
     }
+    // A symbol smaller than a cell may cover no cell center: it still marks the cell it sits in.
+    const i = Math.floor(px);
+    const j = Math.floor(py);
+    if (!marked && i >= 0 && j >= 0 && i < W && j < H && target[j * W + i] < 65535) target[j * W + i]++;
   }
 
   addRect(box: Box, soft: boolean): void {
@@ -72,17 +80,19 @@ export class ObstacleRaster {
     return Math.max(0, i1 - i0) * Math.max(0, j1 - j0);
   }
 
-  /** Whether the segment passes over hard coverage, sampled once per cell. */
-  segmentHitsHard(ax: number, ay: number, bx: number, by: number): boolean {
+  /** Length of the segment over hard coverage, sampled once per cell. */
+  hardLength(ax: number, ay: number, bx: number, by: number): number {
     const { width: W, height: H, res } = this;
-    const steps = Math.ceil(Math.hypot(bx - ax, by - ay) * res);
+    const length = Math.hypot(bx - ax, by - ay);
+    const steps = Math.ceil(length * res);
+    let hits = 0;
     for (let s = 1; s < steps; s++) {
       const t = s / steps;
       const i = Math.floor((ax + (bx - ax) * t - this.bx0) * res);
       const j = Math.floor((ay + (by - ay) * t - this.by0) * res);
-      if (i >= 0 && j >= 0 && i < W && j < H && this.hard[j * W + i] > 0) return true;
+      if (i >= 0 && j >= 0 && i < W && j < H && this.hard[j * W + i] > 0) hits++;
     }
-    return false;
+    return (hits * length) / steps;
   }
 
   private cellRange(box: Box): [number, number, number, number] {
