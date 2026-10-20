@@ -47,7 +47,7 @@ for (const label of result.labels) {
 
 ### Coordinates
 
-You project, the library places. Anchors, sizes, obstacles and bounds are in your coordinate space, with y pointing down: screen pixels, page points, millimetres. Results are in the same space, and `offset` gives the text point relative to the anchor. An offset survives panning, which translates everything. After a zoom, run the placement again with `previous` so labels keep their positions where they can.
+You project, the library places. Anchors, sizes, obstacles and bounds are in your coordinate space, with y pointing down: screen pixels, page points, millimetres. Results are in the same space, and `offset` gives the text point relative to the anchor. An offset survives panning, which translates everything. After a zoom, run the placement again with `previous` so labels keep their positions where they can. Only placements next to the symbol are sticky: a label that needed a leader is placed afresh, so leaders disappear once there is room again.
 
 Lengths you leave undefined default to multiples of the **median label height**, so the defaults hold in any unit.
 

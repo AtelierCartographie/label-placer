@@ -127,6 +127,17 @@ describe('placeLabels', () => {
     expect(sticky.labels[0].placement).toBe('top-right');
   });
 
+  it('drops a sticky leader once the label fits next to its symbol again', () => {
+    const label: LabelInput = { id: 'a', x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 4 } };
+    // Takes the spot right of the symbol, but leaves the leader's way clear.
+    const blocker: LabelInput = { id: 'pin', x: 110, y: 96.5, width: 8, height: 5, mode: 'pinned' };
+    const opts: PlaceOptions = { bounds: [0, 0, 200, 200], inside: false, positions: ['right'] };
+    const first = placeLabels([label, blocker], opts);
+    expect(first.labels[0].ring).toBeGreaterThan(0);
+    const alone = placeLabels([label], { ...opts, previous: first });
+    expect(alone.labels[0].ring).toBe(0);
+  });
+
   it('places more labels with ejection chains than greedily, without losing higher ones', () => {
     const greedy = placeLabels(labels, { ...options, optimize: 'none' });
     expect(result.stats.placed).toBeGreaterThanOrEqual(greedy.stats.placed);

@@ -1,0 +1,1403 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Comment label-placer place les noms</title>
+<meta name="description" content="Fonctionnement de @ateliercartographie/label-placer : candidats, obstacles, passage glouton, chaînes d'éjection, filets et ferrage, avec le vrai moteur embarqué.">
+<style>
+/* Mise en page : une colonne de lecture (~68ch) et des figures plus larges, comme une notice d'atlas avec ses planches. */
+:root {
+  --paper: #f3f6f7;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --ink-2: #4b5967;
+  --rule: #d3dbe1;
+  --accent: #1c5ea8;
+  --accent-soft: #dce8f6;
+  --symbol: #e09b35;
+  --symbol-soft: #f3d7a8;
+  --ok: #1d8350;
+  --ok-soft: #d4efdf;
+  --ko: #c8392f;
+  --ko-soft: #f8dcd9;
+  --warn: #b26a00;
+  --muted: #7f8c98;
+  --map: #ffffff;
+  --legend: #eef2f5;
+  --grid: #e3e9ee;
+  --code-bg: #e9eef2;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-map: Helvetica, Arial, "Liberation Sans", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.55rem;
+  --step-3: clamp(1.9rem, 1.3rem + 2.4vw, 2.9rem);
+  --radius: 6px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10161b; --surface: #172028; --ink: #e3e9ee; --ink-2: #a3afba; --rule: #2b3843;
+    --accent: #7db0ec; --accent-soft: #1d3550; --symbol: #d3923a; --symbol-soft: #5a4220;
+    --ok: #4cbc7e; --ok-soft: #173d29; --ko: #f06e62; --ko-soft: #4a1f1c; --warn: #e3a447;
+    --muted: #7c8995; --map: #121a21; --legend: #1b252e; --grid: #22303b; --code-bg: #1c2731;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #10161b; --surface: #172028; --ink: #e3e9ee; --ink-2: #a3afba; --rule: #2b3843;
+  --accent: #7db0ec; --accent-soft: #1d3550; --symbol: #d3923a; --symbol-soft: #5a4220;
+  --ok: #4cbc7e; --ok-soft: #173d29; --ko: #f06e62; --ko-soft: #4a1f1c; --warn: #e3a447;
+  --muted: #7c8995; --map: #121a21; --legend: #1b252e; --grid: #22303b; --code-bg: #1c2731;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 16px/1.6 var(--font-ui);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 4rem;
+}
+.wrap { max-width: 1080px; margin: 0 auto; }
+.prose { max-width: 68ch; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.15; letter-spacing: -0.015em; }
+h1 { font-size: var(--step-3); margin: 0 0 .6rem; font-weight: 750; }
+h2 { font-size: var(--step-2); margin: 0 0 .8rem; font-weight: 700; }
+h3 { font-size: var(--step-1); margin: 1.6rem 0 .5rem; font-weight: 650; }
+p { margin: 0 0 .9rem; }
+a { color: var(--accent); text-underline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: .88em; }
+code { background: var(--code-bg); padding: .08em .35em; border-radius: 4px; }
+pre { background: var(--code-bg); padding: .9rem 1rem; border-radius: var(--radius); overflow-x: auto; font-size: .85rem; line-height: 1.5; margin: 0 0 1rem; }
+pre code { background: none; padding: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* En-tête */
+header.top { padding-block: 2.6rem 1.2rem; }
+.eyebrow { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); font-weight: 600; margin: 0 0 .5rem; }
+.lede { font-size: 1.12rem; color: var(--ink-2); max-width: 62ch; }
+nav.toc { display: flex; flex-wrap: wrap; gap: .35rem .5rem; margin: 1.2rem 0 0; padding: 0; list-style: none; font-size: .88rem; }
+nav.toc a { display: inline-block; padding: .2rem .55rem; border: 1px solid var(--rule); border-radius: 999px; text-decoration: none; color: var(--ink-2); background: var(--surface); }
+nav.toc a:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Sections. Le repère de titre : le titre est posé en position 1 d'Imhof (en haut à droite) de son point. */
+section { padding-block: 2.6rem 1rem; border-top: 1px solid var(--rule); }
+section > .wrap > h2 { position: relative; padding-left: 1.5rem; }
+section > .wrap > h2::before {
+  content: ""; position: absolute; left: .1rem; top: .28em; width: .62em; height: .62em; max-width: .75rem; max-height: .75rem; border-radius: 50%;
+  background: var(--symbol); box-shadow: 0 0 0 2px var(--paper);
+}
+.step-tag { display: inline-block; font-size: .72rem; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--accent); margin: 0 0 .4rem 1.5rem; }
+
+/* Figures */
+figure { margin: 1.2rem 0 1.4rem; }
+figcaption { font-size: .86rem; color: var(--ink-2); margin-top: .5rem; max-width: 72ch; }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); }
+.scroll-x { overflow-x: auto; }
+svg { display: block; max-width: 100%; height: auto; }
+svg text { font-family: var(--font-map); }
+.fig-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1rem; align-items: start; }
+@media (max-width: 820px) { .fig-grid { grid-template-columns: minmax(0, 1fr); } }
+.side { padding: .8rem .9rem; font-size: .86rem; min-width: 0; }
+.side h4 { margin: 0 0 .4rem; font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-2); }
+
+/* Contrôles */
+.controls { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; margin: .2rem 0 .7rem; font-size: .9rem; }
+.btn {
+  font: inherit; font-size: .88rem; padding: .35rem .8rem; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--surface); color: var(--ink);
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn:disabled { opacity: .45; cursor: default; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 0; }
+.seg .btn { border-radius: 0; margin-left: -1px; }
+.seg .btn:first-child { border-radius: 5px 0 0 5px; margin-left: 0; }
+.seg .btn:last-child { border-radius: 0 5px 5px 0; }
+label.ctl { display: inline-flex; align-items: center; gap: .45rem; color: var(--ink-2); }
+input[type="range"] { accent-color: var(--accent); width: 140px; }
+input[type="checkbox"] { accent-color: var(--accent); }
+.out { font-family: var(--font-mono); font-size: .82rem; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 3ch; display: inline-block; }
+.stat-row { display: flex; flex-wrap: wrap; gap: .4rem 1.4rem; font-size: .9rem; margin: .4rem 0; }
+.stat-row b { font-variant-numeric: tabular-nums; }
+.caption-live { min-height: 3.2em; font-size: .92rem; padding: .55rem .8rem; border-left: 3px solid var(--accent); background: var(--surface); margin: .6rem 0 0; border-radius: 0 var(--radius) var(--radius) 0; }
+.note { font-size: .84rem; color: var(--ink-2); border: 1px dashed var(--rule); padding: .5rem .75rem; border-radius: var(--radius); margin: .6rem 0 1rem; max-width: 72ch; }
+.check { color: var(--ok); font-weight: 600; }
+.check.bad { color: var(--ko); }
+.legend-inline { display: flex; flex-wrap: wrap; gap: .3rem 1rem; font-size: .82rem; color: var(--ink-2); margin: .4rem 0; }
+.legend-inline span::before { content: ""; display: inline-block; width: .9em; height: .65em; margin-right: .35em; vertical-align: -.05em; border-radius: 2px; border: 1.5px solid var(--c); background: var(--b, transparent); }
+
+/* Liste ordonnée du passage glouton */
+ol.order { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow-y: auto; font-size: .82rem; }
+ol.order li { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: .4rem; padding: .12rem .3rem; border-radius: 4px; font-variant-numeric: tabular-nums; }
+ol.order li .n { color: var(--muted); text-align: right; }
+ol.order li .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ol.order li.cur { background: var(--accent-soft); }
+ol.order li.placed .st { color: var(--ok); }
+ol.order li.hidden .st { color: var(--ko); }
+ol.order li .st { font-size: .75rem; }
+
+/* Tableau des candidats */
+table { border-collapse: collapse; width: 100%; font-size: .84rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--rule); }
+th { font-weight: 600; color: var(--ink-2); font-size: .76rem; letter-spacing: .04em; text-transform: uppercase; }
+td.num, th.num { text-align: right; }
+tbody tr.hl { background: var(--accent-soft); }
+.cand-list { max-height: 360px; overflow-y: auto; }
+
+/* Schéma du contrat */
+.contract { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); gap: .6rem; align-items: stretch; }
+.contract .box { padding: .8rem .9rem; min-width: 0; }
+.contract .box h4 { margin: 0 0 .5rem; font-size: .95rem; }
+.contract .arrow { align-self: center; color: var(--muted); font-size: 1.4rem; }
+.contract ul { margin: 0; padding-left: 1.1rem; font-size: .86rem; }
+.contract li { margin: .12rem 0; }
+.contract .engine { border-color: var(--accent); }
+@media (max-width: 820px) { .contract { grid-template-columns: minmax(0, 1fr); } .contract .arrow { transform: rotate(90deg); justify-self: center; } }
+.chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .5rem; }
+.chip { font-size: .78rem; padding: .1rem .5rem; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink-2); }
+
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+@media (max-width: 720px) { .two { grid-template-columns: minmax(0, 1fr); } }
+.bench td:first-child { white-space: nowrap; }
+.big { font-size: 1.9rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.kpi { padding: .8rem 1rem; }
+.kpi p { margin: .2rem 0 0; font-size: .86rem; color: var(--ink-2); }
+ul.refs { padding-left: 1.1rem; }
+ul.refs li { margin: .3rem 0; }
+footer { border-top: 1px solid var(--rule); padding-block: 1.4rem 0; font-size: .84rem; color: var(--ink-2); }
+
+/* Classes SVG (les couleurs passent par les jetons) */
+.bg { fill: var(--map); }
+.legend-box { fill: var(--legend); stroke: var(--rule); }
+.sym { fill: var(--symbol); fill-opacity: .78; stroke: var(--map); stroke-width: .5; }
+.sym-soft { fill: var(--symbol-soft); stroke: var(--symbol); stroke-width: .8; stroke-dasharray: 2 1.5; }
+.lbl { fill: var(--ink); stroke: var(--map); stroke-width: 2.2px; paint-order: stroke; stroke-linejoin: round; }
+.lbl-naive { fill: var(--ink); fill-opacity: .85; }
+.ldr { fill: none; stroke: var(--ink); stroke-width: .7; }
+.ink { fill: var(--ink); }
+.ink2 { fill: var(--ink-2); }
+.muted { fill: var(--muted); }
+.acc { fill: var(--accent); }
+.stroke-rule { stroke: var(--rule); fill: none; }
+.gridline { stroke: var(--grid); stroke-width: 1; fill: none; }
+.box-ok { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.5; }
+.box-ko { fill: var(--ko-soft); fill-opacity: .7; stroke: var(--ko); stroke-width: 1.3; }
+.box-blk { fill: none; stroke: var(--ko); stroke-width: 2.2; }
+.box-static { fill: none; stroke: var(--muted); stroke-width: .8; stroke-dasharray: 2 2; }
+.box-try { fill: var(--accent-soft); fill-opacity: .7; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 2; }
+.box-ghost { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 2; }
+.box-cand { fill: var(--surface); fill-opacity: .6; stroke: var(--accent); stroke-width: 1; }
+.box-ring { fill: none; stroke: var(--muted); stroke-width: .8; stroke-dasharray: 3 2; }
+.box-label { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+.ldr-acc { fill: none; stroke: var(--accent); stroke-width: 1.3; }
+.ldr-ko { fill: none; stroke: var(--ko); stroke-width: 1; }
+.ldr-muted { fill: none; stroke: var(--muted); stroke-width: .8; stroke-dasharray: 2 2; }
+.ring-sg { fill: none; stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 3; }
+.ring-mg { fill: none; stroke: var(--warn); stroke-width: 1; stroke-dasharray: 6 4; }
+.hidden-x { stroke: var(--ko); stroke-width: 1.6; }
+.moved { fill: none; stroke: var(--ko); stroke-width: 1.4; }
+.cell-hard { fill: var(--accent); }
+.cell-soft { fill: var(--symbol); }
+.q-box { fill: none; stroke: var(--ink); stroke-width: 2; cursor: move; }
+.q-corner { fill: var(--surface); stroke: var(--ink); stroke-width: 1.2; }
+.cell-in { fill: var(--ink); fill-opacity: .08; }
+.small { font-size: 11px; }
+.tiny { font-size: 9px; }
+.arrow-line { stroke: var(--ink-2); stroke-width: 1; fill: none; marker-end: url(#arrowhead); }
+.drag { cursor: grab; }
+.drag:active { cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <p class="eyebrow">Atelier de cartographie · @ateliercartographie/label-placer</p>
+    <h1>Comment label-placer place les noms</h1>
+    <p class="lede">Une carte de communes a vite plus de noms que de place. Le moteur décide, pour chaque nom, s'il est affiché et où : à côté de son symbole, dedans, ou plus loin avec un filet. Cette page montre ces décisions une à une, avec le vrai moteur embarqué.</p>
+    <nav class="toc" aria-label="Sommaire">
+      <a href="#probleme">Le problème</a><a href="#contrat">Le contrat</a><a href="#candidats">Candidats</a><a href="#obstacles">Obstacles</a><a href="#glouton">Passage glouton</a><a href="#chaines">Chaînes d'éjection</a><a href="#filets">Filets et ferrage</a><a href="#stabilite">Stabilité</a><a href="#perfs">Performances</a><a href="#plus">Pour aller plus loin</a>
+    </nav>
+  </div>
+</header>
+
+<section id="probleme">
+  <div class="wrap">
+    <h2>Le problème</h2>
+    <div class="prose">
+      <p>Les 1 202 communes de Bretagne, symboles proportionnels aux naissances de 2018, sur une page A4 paysage avec des noms en 9 px. Écrire chaque nom à droite de son cercle donne une tache illisible. Le moteur choisit les noms à garder, par ordre d'importance, et leur trouve une place libre.</p>
+    </div>
+    <div class="controls" role="group" aria-label="Affichage de la carte">
+      <span class="seg">
+        <button class="btn" type="button" id="hero-naive" aria-pressed="false">Tous les noms à droite</button>
+        <button class="btn" type="button" id="hero-greedy" aria-pressed="false">Passage glouton</button>
+        <button class="btn" type="button" id="hero-chain" aria-pressed="true">Avec chaînes d'éjection</button>
+      </span>
+      <span class="out" id="hero-stats" aria-live="polite"></span>
+    </div>
+    <figure>
+      <div class="panel scroll-x"><svg id="hero-svg" viewBox="0 0 1043 714" role="img" aria-labelledby="hero-title" style="min-width:640px"><title id="hero-title">Carte des communes de Bretagne avec leurs noms placés par label-placer</title></svg></div>
+      <figcaption>Calcul fait dans votre navigateur au chargement de la page, avec les mêmes paramètres que le benchmark du dépôt (<code>bench/run.ts</code>) : légende en obstacle, filets autorisés pour les 300 communes les plus importantes. Données : INSEE, naissances 2018 ; IGN Admin Express.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="contrat">
+  <div class="wrap">
+    <h2>Le contrat : vous projetez, le moteur place</h2>
+    <div class="prose">
+      <p>Le moteur ne connaît ni la projection ni la police. L'appelant lui donne des points déjà projetés et la taille de chaque étiquette mesurée, dans ses propres unités (pixels, points, millimètres), avec l'axe y vers le bas. Il reçoit en retour la boîte de chaque étiquette, le point où écrire le texte, son alignement et le filet éventuel. Le rendu reste à sa charge, en SVG, Canvas, deck.gl ou MapLibre.</p>
+      <p>Les longueurs laissées par défaut sont des multiples de la <strong>hauteur médiane des étiquettes</strong>, notée <em>h</em> dans la suite : les réglages tiennent dans n'importe quelle unité.</p>
+    </div>
+    <div class="contract">
+      <div class="box panel">
+        <h4>Ce que vous fournissez</h4>
+        <ul class="mono" style="font-size:.8rem">
+          <li>x, y : ancre projetée</li>
+          <li>width, height : boîte mesurée</li>
+          <li>symbol : cercle, rectangle, surface</li>
+          <li>priority : plus haut gagne</li>
+          <li>mode : pinned, required, optional</li>
+          <li>bounds, obstacles (légende…)</li>
+        </ul>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="box panel engine">
+        <h4><code>placeLabels(labels, options)</code></h4>
+        <ul>
+          <li>construit les candidats</li>
+          <li>rastérise les obstacles fixes</li>
+          <li>passage glouton par priorité</li>
+          <li>chaînes d'éjection, puis polissage</li>
+        </ul>
+        <p style="font-size:.8rem;color:var(--ink-2);margin:.5rem 0 0">Zéro dépendance, déterministe, utilisable dans un Web Worker.</p>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="box panel">
+        <h4>Ce que vous recevez</h4>
+        <ul class="mono" style="font-size:.8rem">
+          <li>visible, placement, ring</li>
+          <li>x, y : point du texte</li>
+          <li>textAnchor : start, middle, end</li>
+          <li>baseline : top, middle, bottom</li>
+          <li>offset : [dx, dy] depuis l'ancre</li>
+          <li>box, leader, overlapping</li>
+        </ul>
+        <div class="chips"><span class="chip">SVG</span><span class="chip">Canvas 2D</span><span class="chip">deck.gl</span><span class="chip">MapLibre</span></div>
+      </div>
+    </div>
+    <figure>
+      <div class="panel scroll-x"><svg id="contract-svg" viewBox="0 0 720 250" role="img" aria-labelledby="contract-title" style="min-width:520px"><title id="contract-title">Une étiquette en entrée et en sortie : ancre, symbole, boîte, point du texte et décalage</title></svg></div>
+      <figcaption>Un même label, en entrée (gauche) et en sortie (droite). Le décalage <code>offset</code> survit à un déplacement de la carte ; après un zoom, on relance le placement avec <code>previous</code> (voir <a href="#stabilite">Stabilité</a>).</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="candidats">
+  <div class="wrap">
+    <p class="step-tag">Étape 1 · Candidats</p>
+    <h2>Les positions candidates</h2>
+    <div class="prose">
+      <p>Pour chaque étiquette, le moteur énumère des positions possibles et leur donne un coût. Le classement suit les préférences d'Imhof : en haut à droite d'abord, puis en haut à gauche, en bas à droite, en bas à gauche, à droite, à gauche, au-dessus, en dessous. Le coût d'une position est son rang, de 0 à 7.</p>
+      <p>Quand la boîte tient dans le cercle, la position <strong>dans le symbole</strong> passe devant tout le monde (coût −1). Si aucune place n'est libre près du symbole, les mêmes positions sont reprises sur des anneaux plus lointains (par défaut à h et 2h du bord du symbole), reliées par un filet. Leur coût vaut rang + 8 + 2 × longueur du filet / h : un filet passe toujours après une position collée.</p>
+    </div>
+    <div class="controls">
+      <label class="ctl" for="cand-r">Rayon du symbole <input type="range" id="cand-r" min="0" max="46" step="1" value="12"><span class="out" id="cand-r-out"></span></label>
+      <label class="ctl" for="cand-w">Largeur du nom <input type="range" id="cand-w" min="20" max="130" step="1" value="62"><span class="out" id="cand-w-out"></span></label>
+      <label class="ctl" for="cand-rings"><input type="checkbox" id="cand-rings" checked> Anneaux avec filet</label>
+    </div>
+    <div class="fig-grid">
+      <figure style="margin:0">
+        <div class="panel"><svg id="cand-svg" viewBox="60 60 440 280" role="img" aria-labelledby="cand-title"><title id="cand-title">Positions candidates autour d'un symbole, numérotées par ordre de préférence</title></svg></div>
+        <figcaption>Hauteur d'étiquette h = 14. Les numéros donnent l'ordre d'essai. Survolez une ligne du tableau pour repérer le candidat. Calcul fait par <code>buildCandidates</code>, la fonction interne du moteur.</figcaption>
+      </figure>
+      <div class="panel side">
+        <h4>Candidats par coût</h4>
+        <div class="cand-list"><table><thead><tr><th>#</th><th>Position</th><th class="num">Coût</th></tr></thead><tbody id="cand-table"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="obstacles">
+  <div class="wrap">
+    <p class="step-tag">Étape 2 · Obstacles fixes</p>
+    <h2>Les obstacles, en quatre lectures</h2>
+    <div class="prose">
+      <p>Les symboles de toutes les communes, la légende et les autres éléments de page ne bougent pas pendant le placement. Le moteur les dessine une seule fois dans une grille de cellules qui compte, pour chaque cellule, combien d'obstacles la couvrent. Il en tire une <strong>table des sommes cumulées</strong> : chaque case contient le total de tout ce qui est au-dessus et à gauche d'elle. La couverture de n'importe quel rectangle se lit alors en quatre cases, quelle que soit sa taille : <code>D − B − C + A</code>.</p>
+      <p>Un candidat hors du cadre ou qui touche un obstacle dur est écarté d'emblée. Les petits symboles ne sont pas durs : sous un rayon de 0,25 h, ils ajoutent seulement un coût de 6 par h² couvert. Les rectangles durs (la légende) sont en plus testés exactement.</p>
+    </div>
+    <div class="controls">
+      <label class="ctl" for="obs-thr">Seuil dur (× h) <input type="range" id="obs-thr" min="0" max="1" step="0.05" value="0.25"><span class="out" id="obs-thr-out"></span></label>
+      <label class="ctl" for="obs-counts"><input type="checkbox" id="obs-counts"> Afficher les comptes par cellule</label>
+    </div>
+    <div class="fig-grid">
+      <figure style="margin:0">
+        <div class="panel"><svg id="obs-svg" viewBox="0 0 576 312" role="img" aria-labelledby="obs-title" tabindex="0"><title id="obs-title">Grille d'obstacles rastérisés et rectangle de test déplaçable. Flèches du clavier pour le déplacer.</title></svg></div>
+        <figcaption>Faites glisser le rectangle noir (ou utilisez les flèches du clavier après avoir cliqué sur la figure). Ici une cellule fait h/2 pour rester lisible ; le moteur en met une dizaine par hauteur d'étiquette. Calcul fait par <code>ObstacleRaster</code>, la classe interne du moteur.</figcaption>
+      </figure>
+      <div class="panel side" id="obs-side" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<section id="glouton">
+  <div class="wrap">
+    <p class="step-tag">Étape 3 · Passage glouton</p>
+    <h2>Le passage glouton</h2>
+    <div class="prose">
+      <p>Les étiquettes passent une par une : d'abord par mode (<code>pinned</code>, puis <code>required</code>, puis <code>optional</code>), puis par priorité décroissante, puis par ordre d'entrée. Chacune prend son <strong>premier candidat libre</strong> : il ne doit chevaucher ni une étiquette déjà posée ni son filet, et son propre filet ne doit traverser ni une boîte ni un autre filet. Les étiquettes posées sont rangées dans une grille uniforme (cases de 2h), si bien qu'un test ne regarde que le voisinage.</p>
+      <p>Une étiquette <code>optional</code> sans candidat libre est masquée. Une <code>required</code> n'est jamais masquée : en dernier recours elle prend le candidat le moins gênant et est signalée <code>overlapping</code>.</p>
+    </div>
+    <div class="controls" role="group" aria-label="Animation du passage glouton">
+      <button class="btn primary" type="button" id="g-play">Lecture</button>
+      <button class="btn" type="button" id="g-prev">Pas précédent</button>
+      <button class="btn" type="button" id="g-next">Pas suivant</button>
+      <button class="btn" type="button" id="g-label">Étiquette suivante</button>
+      <button class="btn" type="button" id="g-reset">Recommencer</button>
+      <label class="ctl" for="g-pos">Pas <input type="range" id="g-pos" min="0" max="1" step="1" value="0"><span class="out" id="g-pos-out"></span></label>
+    </div>
+    <div class="legend-inline" aria-hidden="true">
+      <span style="--c:var(--accent);--b:var(--accent-soft)">candidat essayé</span>
+      <span style="--c:var(--ko);--b:var(--ko-soft)">refusé (chevauche)</span>
+      <span style="--c:var(--ko)">étiquette qui gêne</span>
+      <span style="--c:var(--ok);--b:var(--ok-soft)">retenu</span>
+      <span style="--c:var(--muted)">écarté d'avance (cadre, obstacle dur)</span>
+    </div>
+    <div class="fig-grid">
+      <figure style="margin:0">
+        <div class="panel"><svg id="g-svg" viewBox="0 0 640 420" role="img" aria-labelledby="g-title"><title id="g-title">Animation du passage glouton sur 35 communes autour de Rennes</title></svg></div>
+        <p class="caption-live" id="g-caption" aria-live="polite"></p>
+      </figure>
+      <div class="panel side">
+        <h4>Ordre de passage</h4>
+        <ol class="order" id="g-order"></ol>
+      </div>
+    </div>
+    <p class="note">Les 35 communes les plus natalistes d'une fenêtre de 80 km autour de Rennes, noms en 11 px. L'animation utilise les classes internes du moteur (<code>Placer</code>, ses candidats et son test de conflit) et rejoue la boucle gloutonne pas à pas. <span id="g-check"></span></p>
+  </div>
+</section>
+
+<section id="chaines">
+  <div class="wrap">
+    <p class="step-tag">Étape 4 · Chaînes d'éjection, puis polissage</p>
+    <h2>Les chaînes d'éjection</h2>
+    <div class="prose">
+      <p>Le glouton ne revient jamais sur ses choix. Une étiquette posée tôt peut occuper la seule place d'une voisine alors qu'elle avait d'autres possibilités. Les chaînes d'éjection, inspirées de la recherche FALP de PAL dans QGIS et réécrites ici, réparent ces cas.</p>
+      <p>Une étiquette masquée essaie un de ses candidats gêné par au plus deux étiquettes. Celles-ci sont soulevées et cherchent une autre place libre, ou en libèrent une en poussant à leur tour une troisième étiquette (profondeur 1). La chaîne est acceptée si personne n'est perdu, ou si les seules étiquettes perdues sont <code>optional</code> et de <strong>priorité plus basse</strong> que celle qui entre. Sinon tout revient en place.</p>
+    </div>
+    <div class="controls" role="group" aria-label="Animation des chaînes d'éjection">
+      <button class="btn primary" type="button" id="c-play">Lecture</button>
+      <button class="btn" type="button" id="c-prev">Précédent</button>
+      <button class="btn" type="button" id="c-next">Suivant</button>
+      <button class="btn" type="button" id="c-reset">Recommencer</button>
+      <span class="out" id="c-pos-out"></span>
+    </div>
+    <div class="legend-inline" aria-hidden="true">
+      <span style="--c:var(--accent);--b:var(--accent-soft)">candidat de l'étiquette masquée</span>
+      <span style="--c:var(--ko)">étiquette éjectée</span>
+      <span style="--c:var(--muted)">ancienne place</span>
+      <span style="--c:var(--ok);--b:var(--ok-soft)">nouvelle place</span>
+    </div>
+    <figure style="margin:0">
+      <div class="panel"><svg id="c-svg" viewBox="0 0 640 420" role="img" aria-labelledby="c-title"><title id="c-title">Animation des chaînes d'éjection sur la même scène</title></svg></div>
+      <p class="caption-live" id="c-caption" aria-live="polite"></p>
+    </figure>
+    <div class="two" style="margin-top:1rem">
+      <div class="panel kpi"><strong>La hiérarchie ne se dégrade jamais</strong><p>Une étiquette n'est masquée que pour en montrer une de priorité strictement plus haute. Les étiquettes <code>pinned</code> et les <code>required</code> forcées ne sont jamais éjectées.</p></div>
+      <div class="panel kpi"><strong>Un budget en nombre de tests</strong><p>La recherche s'arrête après un nombre de tests de candidats (par défaut 40 par étiquette), pas après un temps. Le résultat est le même sur toutes les machines. Le polissage final ramène ensuite chaque étiquette sur son meilleur candidat libre.</p></div>
+    </div>
+    <p class="note">Même scène que le passage glouton. L'animation rejoue la boucle des chaînes avec les primitives internes du moteur (conflits, <code>relocate</code>, journal d'annulation). <span id="c-check"></span></p>
+  </div>
+</section>
+
+<section id="filets">
+  <div class="wrap">
+    <h2>Les filets et le ferrage</h2>
+    <div class="prose">
+      <p>Un filet relie une étiquette éloignée à son symbole. Il est <strong>octilinéaire</strong> : une branche à 45° qui quitte le symbole, puis une branche horizontale qui entre au milieu du côté qui lui fait face, ou une branche verticale qui touche le bord haut ou bas dans sa moitié centrale. Un seul segment à 45° suffit quand rien d'autre ne tombe juste. Le filet part à <code>symbolGap</code> (0,25 h) du bord du symbole, et il n'y a pas de filet tant que l'écart entre symbole et boîte reste sous <code>minGap</code> (0,5 h) : l'étiquette se lit encore comme attachée.</p>
+      <p>Le <strong>ferrage</strong> aligne le texte vers son objet : ferré à gauche quand l'étiquette est à droite du symbole, à droite quand elle est à gauche, centré au-dessus, en dessous ou par-dessus.</p>
+    </div>
+    <div class="controls">
+      <label class="ctl" for="ld-r">Rayon <input type="range" id="ld-r" min="0" max="40" step="1" value="16"><span class="out" id="ld-r-out"></span></label>
+      <span class="seg" role="group" aria-label="Style de filet">
+        <button class="btn" type="button" id="ld-octo" aria-pressed="true">Octilinéaire</button>
+        <button class="btn" type="button" id="ld-straight" aria-pressed="false">Droit</button>
+      </span>
+    </div>
+    <div class="fig-grid">
+      <figure style="margin:0">
+        <div class="panel"><svg id="ld-svg" viewBox="0 0 560 380" role="img" aria-labelledby="ld-title" tabindex="0"><title id="ld-title">Étiquette déplaçable autour d'un symbole, avec son filet et son ferrage. Flèches du clavier pour la déplacer.</title></svg></div>
+        <figcaption>Faites glisser l'étiquette, ou cliquez sur la figure puis utilisez les flèches (Maj pour aller plus vite). Tracé par <code>leaderGeometry</code> et <code>flushAlignment</code>, les fonctions publiques du moteur.</figcaption>
+      </figure>
+      <div class="panel side" id="ld-side" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<section id="stabilite">
+  <div class="wrap">
+    <h2>Stabilité et déterminisme</h2>
+    <div class="prose">
+      <p>Quand on zoome, tout est replacé. Sans précaution, des noms qui avaient encore de la place sautent d'un côté à l'autre de leur symbole. En passant le résultat précédent dans <code>previous</code>, chaque étiquette garde son ancienne position tant qu'elle reste libre, avant même d'essayer les autres. Sur le prototype, cette règle avait fait passer de 20–24 % à 6 % la part des étiquettes qui bougent d'un zoom à l'autre. La mesure ci-dessous est faite en direct sur le moteur actuel.</p>
+    </div>
+    <div class="controls">
+      <label class="ctl" for="st-z">Niveau de zoom <input type="range" id="st-z" min="0" max="5" step="1" value="1"><span class="out" id="st-z-out"></span></label>
+      <label class="ctl" for="st-prev"><input type="checkbox" id="st-prev" checked> Avec <code>previous</code></label>
+      <label class="ctl" for="st-chain"><input type="checkbox" id="st-chain"> Chaînes d'éjection</label>
+    </div>
+    <div class="fig-grid">
+      <figure style="margin:0">
+        <div class="panel"><svg id="st-svg" viewBox="0 0 640 420" role="img" aria-labelledby="st-title"><title id="st-title">Placement autour de Rennes à plusieurs niveaux de zoom, étiquettes déplacées entourées</title></svg></div>
+        <figcaption>150 communes autour de Rennes, symboles de taille constante à l'écran. Entourées en rouge : les étiquettes visibles au niveau précédent et à celui-ci qui ont changé de position.</figcaption>
+      </figure>
+      <div class="panel side" id="st-side" aria-live="polite"></div>
+    </div>
+    <h3>Le budget de travail</h3>
+    <div class="prose"><p>L'optimiseur compte ses tests de candidats et s'arrête au budget <code>budget.work</code>. Le résultat ne dépend donc ni de la machine ni de sa charge. Un garde-fou en millisecondes existe (<code>budget.timeMs</code>), mais il rend le résultat dépendant de la machine quand il se déclenche.</p></div>
+    <div class="controls">
+      <label class="ctl" for="bu-w">Budget (tests par étiquette) <input type="range" id="bu-w" min="0" max="6" step="1" value="4"><span class="out" id="bu-w-out"></span></label>
+    </div>
+    <div class="panel side" id="bu-side" aria-live="polite" style="max-width:640px"></div>
+  </div>
+</section>
+
+<section id="perfs">
+  <div class="wrap">
+    <h2>Performances</h2>
+    <div class="prose"><p>Benchmark du dépôt (<code>node bench/run.ts</code>) : noms des communes françaises à côté de symboles proportionnels aux naissances (INSEE 2018), page A4 paysage, noms en 9 px, légende en obstacle. Apple M4 Max, Node 22, un seul fil.</p></div>
+    <div class="panel scroll-x">
+      <table class="bench">
+        <thead><tr><th>Scénario</th><th>Variante</th><th class="num">Total</th><th class="num">Placés</th><th class="num">Top 100 placé</th><th class="num">Top 1000 placé</th></tr></thead>
+        <tbody>
+          <tr><td>Bretagne, 1 202 communes</td><td>glouton</td><td class="num">12 ms</td><td class="num">377</td><td class="num">82 %</td><td class="num">35,8 %</td></tr>
+          <tr><td></td><td>chaînes d'éjection</td><td class="num">18 ms</td><td class="num">402</td><td class="num">84 %</td><td class="num">38,3 %</td></tr>
+          <tr><td>Grand Est + BFC + IdF, 10 066</td><td>glouton</td><td class="num">39 ms</td><td class="num">399</td><td class="num">28 %</td><td class="num">25,7 %</td></tr>
+          <tr><td></td><td>chaînes d'éjection</td><td class="num">87 ms</td><td class="num">419</td><td class="num">28 %</td><td class="num">27,7 %</td></tr>
+          <tr><td>France, 34 734</td><td>glouton</td><td class="num">89 ms</td><td class="num">404</td><td class="num">56 %</td><td class="num">26,2 %</td></tr>
+          <tr><td></td><td>chaînes d'éjection</td><td class="num">320 ms</td><td class="num">441</td><td class="num">56 %</td><td class="num">29,0 %</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Le top 100 des grands scénarios est plafonné par l'agglomération parisienne, où les plus grosses communes sont trop proches pour des noms en 9 px sur une page A4.</p>
+    <h3>Quels symboles bloquent ?</h3>
+    <div class="prose"><p>Faire de chaque petit point un obstacle dur semble prudent. En pratique, les grandes villes d'une carte dense sont entourées de dizaines de petites communes et n'ont plus aucune place libre. Le seuil dur/doux corrige cela. Comparaison en direct sur la Bretagne, passage glouton :</p></div>
+    <div class="two" id="pol-out"></div>
+    <div class="prose" style="margin-top:1rem">
+      <p>Un recuit simulé a aussi été essayé sur le prototype. Il plaçait plus d'étiquettes au total, mais en sacrifiant des communes importantes : il a été écarté au profit des chaînes d'éjection, qui ne dégradent jamais la hiérarchie.</p>
+    </div>
+  </div>
+</section>
+
+<section id="plus">
+  <div class="wrap">
+    <h2>Pour aller plus loin</h2>
+    <pre><code>import { placeLabels } from '@ateliercartographie/label-placer';
+
+const { labels } = placeLabels(villes.map((v) =&gt; ({
+  id: v.code, x: v.ecranX, y: v.ecranY,          // déjà projetés, y vers le bas
+  width: mesure(v.nom).width, height: 11,       // boîte avec marge et halo
+  symbol: { type: 'circle', radius: v.rayon },
+  priority: v.population
+})), { bounds: [0, 0, largeur, hauteur], obstacles: [{ type: 'rect', box: legende }] });
+
+for (const l of labels) if (l.visible) dessiner(l.x, l.y, l.textAnchor, l.baseline, l.leader);</code></pre>
+    <div class="prose">
+      <p>Dépôt (privé) : <a href="https://github.com/AtelierCartographie/label-placer">github.com/AtelierCartographie/label-placer</a>. Le README détaille toutes les options et des exemples de rendu SVG, Canvas, deck.gl et MapLibre.</p>
+      <h3>Inspirations</h3>
+      <p>Aucun code n'a été repris ; les idées viennent de :</p>
+      <ul class="refs">
+        <li>Eduard Imhof, l'ordre de préférence des positions autour d'un point.</li>
+        <li>Christensen, Marks et Shieber (1995), sur le placement d'étiquettes de points.</li>
+        <li>PAL dans QGIS : la recherche FALP et les chaînes d'éjection.</li>
+        <li>MapLibre : les ancres collantes et l'index en grille.</li>
+        <li>vega-label : la carte d'occupation en bitmap.</li>
+        <li>d3-annotation : les connecteurs.</li>
+        <li>Philippe Rivière, le carnet Observable <em>Automated label placement (France)</em>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">Atelier de cartographie de Sciences Po · Le moteur embarqué dans cette page est la source de <code>label-placer</code> (version de développement), compilée telle quelle. Aucune requête réseau.</div>
+</footer>
+
+<script>
+var LabelPlacer=(()=>{var q=Object.defineProperty;var rt=Object.getOwnPropertyDescriptor;var ot=Object.getOwnPropertyNames;var it=Object.prototype.hasOwnProperty;var st=(s,t)=>{for(var e in t)q(s,e,{get:t[e],enumerable:!0})},at=(s,t,e,r)=>{if(t&&typeof t=="object"||typeof t=="function")for(let n of ot(t))!it.call(s,n)&&n!==e&&q(s,n,{get:()=>t[n],enumerable:!(r=rt(t,n))||r.enumerable});return s};var lt=s=>at(q({},"__esModule",{value:!0}),s);var gt={};st(gt,{DEFAULT_POSITIONS:()=>F,ObstacleRaster:()=>_,Placer:()=>H,buildCandidates:()=>D,candidateKey:()=>j,flushAlignment:()=>G,leaderGeometry:()=>T,placeLabels:()=>yt});var K=(s,t,e)=>Math.min(Math.max(s,t),e),B=s=>s<0?-1:1,X=(s,t,e)=>s<t?t-s:s>e?s-e:0;function J([s,t],[e,r]){return{horizontal:X(0,s-e,s+e),vertical:X(0,t-r,t+r)}}function G(s,t){let[e,r]=Q(s,t),n=J(e,r);return n.horizontal===0||n.horizontal<n.vertical?"middle":e[0]>0?"start":"end"}function Q([s,t],[e,r,n,i]){return[[(e+n)/2-s,(r+i)/2-t],[(n-e)/2,(i-r)/2]]}function V([s,t],[e]){let r=s-e>0?s-e:s+e<0?s+e:null;return r===null||Math.abs(t)>Math.abs(r)?null:{port:[r,t],end:"horizontal"}}function $([s,t],[e,r]){let n=t-r>0?t-r:t+r<0?t+r:null;if(n===null)return null;let i=K(0,s-e/2,s+e/2);if(Math.abs(i)<=Math.abs(n))return{port:[i,n],end:"vertical"};let o=B(i)*Math.abs(n);return o>=s-e&&o<=s+e?{port:[o,n],end:"diagonal"}:null}function ut([s,t],[e,r]){let n=B(s),i=B(t),o=Math.max(n*s-e,i*t-r,0),a=Math.min(n*s+e,i*t+r);return o>0&&o<=a?{port:[n*o,i*o],end:"diagonal"}:null}function T({anchor:s,symbol:t,box:e,style:r="octilinear",symbolGap:n=0,minGap:i=0}){let[o,a]=Q(s,e),[c,l]=o,[u,d]=a,m=[K(0,c-u,c+u),K(0,l-d,l+d)],f=Math.hypot(m[0],m[1]);if(f===0)return null;let y=z(t,m[0]/f,m[1]/f);if(f-y<i)return null;let M=J(o,a),A=(M.horizontal>=M.vertical?[V,$]:[$,V]).reduce((P,R)=>P??R(o,a),null)??ut(o,a);if(!A)return null;let{port:h,end:b}=A,[x,C]=h,I=P=>P>0?P+n:0,p=P=>P.map(([R,O])=>[s[0]+R,s[1]+O]),v=(P,R)=>{let O=Math.hypot(P,R);if(O===0)return null;let U=I(z(t,P/O,R/O));return U<O?[P/O*U,R/O*U]:null};if(r==="straight"){let P=v(x,C);return P?p([P,h]):null}let L=b==="horizontal"?[B(x)*Math.abs(C),C]:b==="vertical"?[x,B(C)*Math.abs(x)]:h,S=v(L[0],L[1]);if(S)return p(L===h?[S,h]:[S,L,h]);let g=I(z(t,b==="vertical"?0:B(x),b==="vertical"?B(C):0)),k=b==="vertical"?[x,B(C)*Math.sqrt(Math.max(0,g*g-x*x))]:[B(x)*Math.sqrt(Math.max(0,g*g-C*C)),C];return p([k,h])}function z(s,t,e){if(!s)return 0;switch(s.type){case"circle":return s.radius;case"rect":{let r=t===0?1/0:s.width/2/Math.abs(t),n=e===0?1/0:s.height/2/Math.abs(e);return Math.min(r,n)}case"area":return 0}}var ct={"top-right":[1,-1],"top-left":[-1,-1],"bottom-right":[1,1],"bottom-left":[-1,1],right:[1,0],left:[-1,0],top:[0,-1],bottom:[0,1]},F=["top-right","top-left","bottom-right","bottom-left","right","left","top","bottom"],ht=-1;function E(s,t,e,r,n,i,o){let[a,c,l,u]=s;if(o)for(let[d,m]of o)a=Math.min(a,d),c=Math.min(c,m),l=Math.max(l,d),u=Math.max(u,m);return{x0:s[0],y0:s[1],x1:s[2],y1:s[3],cost:t,placement:e,ring:r,textAnchor:n,baseline:i,leader:o,bx0:a,by0:c,bx1:l,by1:u}}function D(s,t){let{x:e,y:r,width:n,height:i,symbol:o}=s,a=[];if(o?.type==="area"){let l=Math.hypot(n/2,i/2),u=o.inscribedRadius>0?Math.min(1,Math.max(0,l/o.inscribedRadius-1)):1;a.push(E([e-n/2,r-i/2,e+n/2,r+i/2],t.areaOverflowCost*u,"center",0,"middle","middle",null))}else t.inside&&o&&(o.type==="circle"?Math.hypot(n/2,i/2)<=o.radius:n<=o.width&&i<=o.height)&&a.push(E([e-n/2,r-i/2,e+n/2,r+i/2],ht,"inside",0,"middle","middle",null));let c=s.leader===!1?[0]:[0,...t.rings];for(let l=0;l<c.length;l++)for(let u=0;u<t.positions.length;u++){let d=t.positions[u],[m,f]=ct[d],y=m!==0&&f!==0?Math.SQRT1_2:1,M=t.gap+c[l],w,A;if(o?.type==="rect")w=e+m*(o.width/2+M*y),A=r+f*(o.height/2+M*y);else{let g=o?z(o,m*y,f*y):0;w=e+m*(g+M)*y,A=r+f*(g+M)*y}let h=m>0?w:m<0?w-n:w-n/2,b=f>0?A:f<0?A-i:A-i/2,x=[h,b,h+n,b+i],C=G([e,r],x),I=f>0?"top":f<0?"bottom":"middle",p=o?.type==="area"?u+1:u;if(l===0){a.push(E(x,p,d,0,C,I,null));continue}let v=T({anchor:[e,r],symbol:o,box:x,style:t.leaderStyle,symbolGap:t.symbolGap,minGap:t.minGap});if(!v)continue;let L=0;for(let g=1;g<v.length;g++)L+=Math.hypot(v[g][0]-v[g-1][0],v[g][1]-v[g-1][1]);let S=p+t.leaderBaseCost+t.leaderLengthCost*L/t.unit;a.push(E(x,S,d,l,C,I,v))}return a.sort((l,u)=>l.cost-u.cost)}function W(s,t,e,r,n,i,o,a){return s<o&&n<e&&t<a&&i<r}function Y(s,t,e,r,n,i,o,a){let c=0,l=1,u=e-s,d=r-t,m=(f,y)=>{if(f===0)return y>0;let M=y/f;if(f<0){if(M>l)return!1;M>c&&(c=M)}else{if(M<c)return!1;M<l&&(l=M)}return!0};return m(-u,s-n)&&m(u,o-s)&&m(-d,t-i)&&m(d,a-t)&&c<l}function Z(s,t,e,r,n,i,o,a){let c=(l,u,d,m,f,y)=>Math.sign((d-l)*(y-u)-(m-u)*(f-l));return c(s,t,e,r,n,i)*c(s,t,e,r,o,a)<0&&c(n,i,o,a,s,t)*c(n,i,o,a,e,r)<0}var N=class{cells;nx;ny;x0;y0;size;constructor(t,e,r,n,i){this.x0=t,this.y0=e,this.size=i,this.nx=Math.max(1,Math.ceil((r-t)/i)),this.ny=Math.max(1,Math.ceil((n-e)/i)),this.cells=Array.from({length:this.nx*this.ny},()=>[])}range(t,e,r,n){let i=a=>Math.min(this.nx-1,Math.max(0,Math.floor((a-this.x0)/this.size))),o=a=>Math.min(this.ny-1,Math.max(0,Math.floor((a-this.y0)/this.size)));return[i(t),o(e),i(r),o(n)]}insert(t,e,r,n,i){let[o,a,c,l]=this.range(e,r,n,i);for(let u=a;u<=l;u++)for(let d=o;d<=c;d++)this.cells[u*this.nx+d].push(t)}remove(t,e,r,n,i){let[o,a,c,l]=this.range(e,r,n,i);for(let u=a;u<=l;u++)for(let d=o;d<=c;d++){let m=this.cells[u*this.nx+d],f=m.indexOf(t);f>=0&&(m[f]=m[m.length-1],m.pop())}}};var _=class{width;height;bx0;by0;res;hard;soft;hardSat=null;softSat=null;constructor(t,e){this.bx0=t[0],this.by0=t[1],this.res=e,this.width=Math.max(1,Math.ceil((t[2]-t[0])*e)),this.height=Math.max(1,Math.ceil((t[3]-t[1])*e)),this.hard=new Uint16Array(this.width*this.height),this.soft=new Uint16Array(this.width*this.height)}addCircle(t,e,r,n){let i=n?this.soft:this.hard,{width:o,height:a,res:c}=this,l=(t-this.bx0)*c,u=(e-this.by0)*c,d=r*c,m=Math.max(0,Math.floor(u-d)),f=Math.min(a-1,Math.ceil(u+d)),y=Math.max(0,Math.floor(l-d)),M=Math.min(o-1,Math.ceil(l+d));for(let w=m;w<=f;w++){let A=w+.5-u;for(let h=y;h<=M;h++){let b=h+.5-l;b*b+A*A<=d*d&&i[w*o+h]<65535&&i[w*o+h]++}}}addRect(t,e){let r=e?this.soft:this.hard,[n,i,o,a]=this.cellRange(t);for(let c=i;c<a;c++)for(let l=n;l<o;l++)r[c*this.width+l]<65535&&r[c*this.width+l]++}finalize(){this.hardSat=this.sat(this.hard),this.softSat=this.sat(this.soft)}hardCoverage(t){return this.sum(this.hardSat,t)}softArea(t){return this.sum(this.softSat,t)/(this.res*this.res)}cellCount(t){let[e,r,n,i]=this.cellRange(t);return Math.max(0,n-e)*Math.max(0,i-r)}segmentHitsHard(t,e,r,n){let{width:i,height:o,res:a}=this,c=Math.ceil(Math.hypot(r-t,n-e)*a);for(let l=1;l<c;l++){let u=l/c,d=Math.floor((t+(r-t)*u-this.bx0)*a),m=Math.floor((e+(n-e)*u-this.by0)*a);if(d>=0&&m>=0&&d<i&&m<o&&this.hard[m*i+d]>0)return!0}return!1}cellRange(t){let{res:e}=this,r=Math.max(0,Math.ceil((t[0]-this.bx0)*e-.5)),n=Math.min(this.width,Math.floor((t[2]-this.bx0)*e-.5)+1),i=Math.max(0,Math.ceil((t[1]-this.by0)*e-.5)),o=Math.min(this.height,Math.floor((t[3]-this.by0)*e-.5)+1);return[r,i,n,o]}sum(t,e){let[r,n,i,o]=this.cellRange(e);if(i<=r||o<=n)return 0;let a=this.width+1;return t[o*a+i]-t[n*a+i]-t[o*a+r]+t[n*a+r]}sat(t){let e=this.width,r=e+1,n=new Float64Array(r*(this.height+1));for(let i=0;i<this.height;i++){let o=0;for(let a=0;a<e;a++)o+=t[i*e+a],n[(i+1)*r+a+1]=n[i*r+a+1]+o}return n}};var tt={pinned:0,required:1,optional:2},dt=4e6,et=2,mt=1;function ft(s){if(s.length===0)return 1;let t=s.slice().sort((e,r)=>e-r);return t[t.length>>1]||1}function bt(s,t){if(W(s.x0,s.y0,s.x1,s.y1,t.x0,t.y0,t.x1,t.y1)||s.leader&&nt(s.leader,t)||t.leader&&nt(t.leader,s))return!0;if(s.leader&&t.leader)for(let e=1;e<s.leader.length;e++)for(let r=1;r<t.leader.length;r++){let[n,i]=[s.leader[e-1],s.leader[e]],[o,a]=[t.leader[r-1],t.leader[r]];if(Z(n[0],n[1],i[0],i[1],o[0],o[1],a[0],a[1]))return!0}return!1}function nt(s,t){for(let e=1;e<s.length;e++){let[r,n]=[s[e-1],s[e]];if(Y(r[0],r[1],n[0],n[1],t.x0,t.y0,t.x1,t.y1))return!0}return!1}var H=class{labels;current;feasible=[];blocked=[];order;forced=new Set;sticky=new Set;grid;stamp;stampValue=0;journal=null;bounds;work=0;constructor(t,e){this.labels=t,this.bounds=e.bounds;let r=t.length;this.current=new Array(r).fill(null),this.stamp=new Int32Array(r);let n=ft(t.map(h=>h.height)),[i,o,a,c]=e.bounds;this.grid=new N(i,o,a,c,n*2);let l=e.leader===!1?null:e.leader??{},u={positions:e.positions??F,gap:e.gap??.2*n,inside:e.inside??!0,rings:l?l.rings??[n,2*n]:[],leaderStyle:l?.style??"octilinear",symbolGap:l?.symbolGap??.25*n,minGap:l?.minGap??.5*n,leaderBaseCost:l?.baseCost??8,leaderLengthCost:l?.lengthCost??2,areaOverflowCost:e.areaOverflowCost??6,unit:n},d=Math.max(1e-9,(a-i)*(c-o)),m=e.resolution??Math.min(10/n,Math.sqrt(dt/d)),f=new _(e.bounds,m),y=e.symbolObstacles?.hardMinRadius??.25*n,M=e.symbolObstacles?.softCost??6,w=.5/m;for(let h of t)if(h.symbol?.type==="circle"&&h.symbol.radius>0)f.addCircle(h.x,h.y,Math.max(h.symbol.radius,w),h.symbol.radius<y);else if(h.symbol?.type==="rect"){let{width:b,height:x}=h.symbol;f.addRect([h.x-b/2,h.y-x/2,h.x+b/2,h.y+x/2],Math.max(b,x)/2<y)}let A=[];for(let h of e.obstacles??[])h.type==="circle"?f.addCircle(h.x,h.y,h.radius,h.soft??!1):(f.addRect(h.box,h.soft??!1),h.soft||A.push(h.box));f.finalize();for(let h=0;h<r;h++){let b=t[h];if(!(b.width>0&&b.height>0)){this.feasible.push([]),this.blocked.push([]);continue}if(b.mode==="pinned"){let[p,v]=b.offset??[0,0],L=b.x+p,S=b.y+v,g=[L-b.width/2,S-b.height/2,L+b.width/2,S+b.height/2],k=l?T({anchor:[b.x,b.y],symbol:b.symbol,box:g,style:u.leaderStyle,symbolGap:u.symbolGap,minGap:u.minGap}):null;this.feasible.push([E(g,0,"pinned",0,G([b.x,b.y],g),"middle",k)]),this.blocked.push([]);continue}let x=this.ownHardCoverage(b,y),C=[],I=[];for(let p of D(b,u)){let v=[p.x0,p.y0,p.x1,p.y1],L=p.x0<i||p.y0<o||p.x1>a||p.y1>c,S=p.placement==="inside"&&x?f.cellCount(v):0,g=A.some(k=>W(p.x0,p.y0,p.x1,p.y1,k[0],k[1],k[2],k[3]))||f.hardCoverage(v)-S>0||p.leader!==null&&p.leader.some((k,P)=>P>0&&f.segmentHitsHard(p.leader[P-1][0],p.leader[P-1][1],k[0],k[1]));M>0&&(p.cost+=M*f.softArea(v)/(n*n)),(L||g?I:C).push(p)}C.sort((p,v)=>p.cost-v.cost),this.feasible.push(C),this.blocked.push(I)}this.order=t.map((h,b)=>b).sort((h,b)=>tt[t[h].mode??"optional"]-tt[t[b].mode??"optional"]||(t[b].priority??0)-(t[h].priority??0)||h-b)}ownHardCoverage(t,e){return t.symbol?.type==="circle"?t.symbol.radius>=e:t.symbol?.type==="rect"?Math.max(t.symbol.width,t.symbol.height)/2>=e:!1}priority(t){return this.labels[t].priority??0}mode(t){return this.labels[t].mode??"optional"}conflicts(t,e,r=1/0){this.work++;let n=[],i=++this.stampValue,o=this.grid,[a,c,l,u]=o.range(e.bx0,e.by0,e.bx1,e.by1);for(let d=c;d<=u;d++)for(let m=a;m<=l;m++)for(let f of o.cells[d*o.nx+m]){if(f===t||this.stamp[f]===i)continue;this.stamp[f]=i;let y=this.current[f];if(y&&bt(e,y)&&(n.push(f),n.length>=r))return n}return n}isFree(t,e){return this.conflicts(t,e,1).length===0}place(t,e){this.journal&&!this.journal.has(t)&&this.journal.set(t,this.current[t]),this.current[t]&&this.unplace(t),this.current[t]=e,this.grid.insert(t,e.bx0,e.by0,e.bx1,e.by1)}unplace(t){this.journal&&!this.journal.has(t)&&this.journal.set(t,this.current[t]);let e=this.current[t];e&&(this.grid.remove(t,e.bx0,e.by0,e.bx1,e.by1),this.current[t]=null)}previous;greedy(t){this.previous=t;for(let e of this.order){let r=this.feasible[e];if(this.mode(e)==="pinned"){r.length&&this.place(e,r[0]);continue}let n=null,i=t?.[e];if(i){let o=r.find(a=>j(a)===i);o&&this.isFree(e,o)&&(n=o,this.sticky.add(e))}if(n||(n=r.find(o=>this.isFree(e,o))??null),!n&&this.mode(e)==="required"){let o=1/0;for(let a of[r,this.blocked[e]]){for(let c of a){let l=this.conflicts(e,c).length*1e3+c.cost;l<o&&(o=l,n=c)}if(n)break}n&&this.forced.add(e)}n&&this.place(e,n)}}chain(t,e){let r=()=>this.work>=t||performance.now()>e,n=!0;for(;n&&!r();){n=!1;for(let i of this.order){if(r())return;if(!(this.current[i]||this.mode(i)!=="optional"))for(let o of this.feasible[i]){if(r())return;let a=this.conflicts(i,o,et+1);if(a.length>et||a.some(u=>this.mode(u)==="pinned"||this.forced.has(u)))continue;this.journal=new Map;for(let u of a)this.unplace(u);this.place(i,o);let c=!0;for(let u of a)if(!this.relocate(u,mt,r)&&(this.mode(u)==="required"||this.priority(u)>=this.priority(i))){c=!1;break}let l=this.journal;if(this.journal=null,c){n=!0;break}for(let[u,d]of l)this.unplace(u),d&&this.place(u,d)}}}}relocate(t,e,r){let n=this.current[t];for(let i of this.feasible[t])if(i!==n&&this.isFree(t,i))return this.place(t,i),!0;if(e<=0||r())return!1;for(let i of this.feasible[t]){if(i===n)continue;let o=this.conflicts(t,i,2);if(o.length!==1)continue;let a=o[0];if(this.mode(a)==="pinned"||this.forced.has(a))continue;let c=this.current[a];if(this.unplace(a),this.place(t,i),this.relocate(a,e-1,r))return!0;this.unplace(t),n&&this.place(t,n),this.place(a,c)}return!1}polish(){for(let t of this.order){let e=this.current[t];if(!(!e||this.mode(t)==="pinned"||this.forced.has(t))&&!(this.sticky.has(t)&&j(e)===this.previous?.[t]))for(let r of this.feasible[t]){if(r.cost>=e.cost)break;if(this.isFree(t,r)){this.place(t,r);break}}}}result(t){let e=this.labels.map((n,i)=>{let o=this.current[i];if(!o)return{index:i,id:n.id,visible:!1,placement:null,ring:0,x:n.x,y:n.y,textAnchor:"middle",baseline:"middle",offset:[0,0],box:null,leader:null,overlapping:!1};let a=o.textAnchor==="start"?o.x0:o.textAnchor==="end"?o.x1:(o.x0+o.x1)/2,c=o.baseline==="top"?o.y0:o.baseline==="bottom"?o.y1:(o.y0+o.y1)/2;return{index:i,id:n.id,visible:!0,placement:o.placement,ring:o.ring,x:a,y:c,textAnchor:o.textAnchor,baseline:o.baseline,offset:[a-n.x,c-n.y],box:[o.x0,o.y0,o.x1,o.y1],leader:o.leader,overlapping:this.forced.has(i)||this.mode(i)==="pinned"&&this.conflicts(i,o,1).length>0||this.outOfBounds(o)}}),r=e.filter(n=>n.visible).length;return{labels:e,stats:{placed:r,hidden:e.length-r,overlapping:e.filter(n=>n.overlapping).length,work:this.work,timings:t}}}outOfBounds(t){let[e,r,n,i]=this.bounds;return t.x0<e||t.y0<r||t.x1>n||t.y1>i}};function j(s){return s.placement?`${s.placement}:${s.ring}`:null}var pt=40;function yt(s,t){let e=performance.now(),r=new H(s,t),n=performance.now();r.greedy(xt(s,t.previous));let i=performance.now();if((t.optimize??"chain")==="chain"){let a=t.budget?.work??pt*s.length,c=t.budget?.timeMs===void 0?1/0:i+t.budget.timeMs;r.chain(r.work+a,c),r.polish()}let o=performance.now();return r.result({setup:n-e,greedy:i-n,optimize:o-i})}function xt(s,t){if(!t)return;let e=new Map;for(let r of t.labels)r.id!==void 0&&e.set(r.id,j(r));return s.map((r,n)=>r.id!==void 0?e.get(r.id)??null:t.labels[n]?j(t.labels[n]):null)}return lt(gt);})();
+
+</script>
+<script>
+const BZH = [["Trévérien",8,33515.2,681936],["Châteauneuf-d'Ille-et-Vilaine",13,33655.9,684037.7],["Plesder",14,33592.2,682392.6],["Saint-Coulomb",20,33855.4,685306.1],["Miniac-Morvan",54,33839.7,683511.2],["Saint-Domineuc",32,33912.1,681901.7],["Lillemer",8,34150.2,684038.3],["Saint-Benoît-des-Ondes",12,34270.9,684642.2],["Plerguer",47,34219.7,683615.9],["La Fresnais",26,34302.5,684370.3],["Le Tronchet",10,34266.2,683162.1],["Tinténiac",35,34175.6,681414.3],["La Chapelle-aux-Filtzméens",13,34301.1,682022.7],["Meillac",28,34390.3,682325.2],["Roz-Landrieux",18,34495,683788.4],["Hirel",8,34629,684473.8],["Baguer-Morvan",11,34768.3,683565.6],["Le Vivier-sur-Mer",6,34829.2,684419.7],["Mont-Dol",8,34837.9,684060.5],["Bonnemain",18,34781,682914.4],["Dol-de-Bretagne",39,34937.5,683828],["Lourmais",2,35065.6,682698.5],["Dingé",18,35087.5,681674.7],["Cherrueix",9,35296.7,684425.5],["Trémeheuc",2,35229.1,682427.6],["Lanrigan",0,35229.3,682077.9],["Baguer-Pican",21,35339.4,683843.3],["Epiniac",13,35321,683367.1],["Trimer",2,33768.3,681596.6],["Saint-Thual",13,33459.8,681535.2],["La Baussaine",9,33708.8,681269],["Longaulnay",5,33406.1,681248.9],["La Gouesnière",18,33944.2,684493.3],["Pleugueneuc",27,33723.3,682205.9],["Saint-Guinoux",16,33993.5,684189.7],["Saint-Méloir-des-Ondes",48,33883.7,684873.4],["Saint-Père-Marc-en-Poulet",27,33713.6,684328.6],["Combourg",49,34852,682276.6],["Cancale",28,34291,685264.8],["Québriac",16,34253.2,681586.4],["Mesnil-Roc'h",57,33691.2,682757.9],["Vieux-Vy-sur-Couesnon",13,36763.5,681423.2],["Brécé",16,36655,678838.6],["Gosné",24,36864,680343.2],["Saint-Christophe-de-Valains",1,37064.6,681391.7],["La Bouëxière",64,37038,679634],["Mézières-sur-Couesnon",27,37145.8,680857.7],["Saint-Ouen-des-Alleux",15,37209.8,681216.1],["Le Tiercent",3,37365.9,681464.4],["Châteaubourg",97,37234.5,678792.6],["Saint-Aubin-du-Cormier",46,37369.8,680461.8],["Saint-Didier",20,37469.5,678624.1],["Rives-du-Couesnon",36,37606.2,680779.7],["Dourdain",12,37547.3,679700.7],["Saint-Jean-sur-Vilaine",19,37561,678856.5],["Saint-Hilaire-des-Landes",10,37741.3,681461.3],["Marpiré",12,37735.2,679127],["Champeaux",4,37953.2,679181.7],["Mecé",4,38070.3,680171.6],["Val-d'Izé",27,38038.9,679500.2],["Landavran",8,38125.6,679297.1],["Saint-Christophe-des-Bois",5,38475.8,680031.7],["Combourtillé",6,38507.3,680533.9],["Billé",11,38522.1,680690.1],["Taillis",7,38514.6,679607.3],["Montreuil-sous-Pérouse",8,38524.1,679180.1],["Montreuil-des-Landes",3,38663.4,680245],["Fougères",190,38865.8,681397.9],["Parcé",11,38842.1,680527.2],["Balazé",21,38842.9,679359.5],["Châtillon-en-Vendelais",24,38978.6,679979.5],["Domagné",25,37284.9,678354.5],["Saint-Aubin-des-Landes",10,38025.4,678578.4],["Cornillé",7,37943.5,678427.2],["Servon-sur-Vilaine",54,36829.6,678951.5],["Pocé-les-Bois",22,38390.3,678793.9],["Javené",17,38750.9,681047.6],["La Chapelle-Saint-Aubert",10,38085.6,681019.9],["Romagné",29,38332,681326.1],["Saint-Sauveur-des-Landes",13,38055.4,681342.7],["Vitré",162,38649.8,678884.8],["Livré-sur-Changeon",16,37765.2,679975.2],["Les Portes du Coglais",26,38149.2,682441.1],["Saint-Germain-en-Coglès",22,38465.3,682002.8],["Poilley",2,38507.8,682695.7],["Le Châtellier",12,38536.5,682130.4],["Villamée",4,38834,682624.3],["Lécousse",27,38778.8,681586.4],["Le Ferré",11,38287.8,682983.7],["Saint-Georges-de-Reintembault",13,38671.9,683160],["Monthault",3,39128.6,683165.3],["Le Pertre",9,39928.8,677819.1],["Argentré-du-Plessis",45,39110.6,678111.5],["Bréal-sous-Vitré",14,39780.6,678598],["La Chapelle-Erbrée",13,39515.4,679019.7],["Saint-M'Hervé",14,39410.7,679446],["Princé",4,39649.2,679873.9],["Erbrée",17,39304.7,678571.6],["Mondevert",15,39501.9,678380],["Montautour",5,39191.6,679737.3],["Saint-Germain-du-Pinel",9,38937.7,677600.6],["Gennes-sur-Seiche",7,39243.6,677347.8],["Brielles",9,39522.6,677533.2],["La Selle-Guerchaise",1,38866.8,676862.3],["La Chapelle-Janson",17,39639.7,681314.7],["Laignelet",11,39287.8,681588],["Louvigné-du-Désert",23,39536.6,682792.3],["La Selle-en-Luitré",9,39415,680911.9],["La Bazouge-du-Désert",10,39654.5,682378.9],["Beaucé",6,39210.4,681230.6],["Parigné",9,39004.8,682238.3],["Mellé",12,39055.7,682910.5],["Landéan",13,39286,682055],["Le Loroux",11,39912.2,681818.8],["Luitré-Dompierre",21,39474,680620.5],["Moulins",7,37413.7,677581.8],["Marcillé-Robert",13,37459.9,677001.7],["Louvigné-de-Bais",31,37736.7,678086.4],["Martigné-Ferchaud",19,37713.8,675670.7],["Visseiche",7,37896.9,677028.5],["Arbrissel",1,37881.7,676728.4],["Bais",34,38029.1,677654.1],["Drouges",5,38142.2,676417.8],["Vergéal",10,38233.8,677921],["Rannée",15,38337.3,676656.5],["Domalain",24,38386.2,677470.3],["Moutiers",8,38575.7,677124.2],["Availles-sur-Seiche",4,38702.8,677065.4],["Retiers",44,37308.7,676595.1],["Eancé",3,38251.4,675539.8],["Forges-la-Forêt",4,38011.9,675987.8],["Moussé",2,38118.3,676677.7],["Chelun",6,38430.1,675884],["Étrelles",41,38772.7,678159.4],["Torcé",28,38225.7,678200.5],["La Guerche-de-Bretagne",41,38438.1,676865.8],["Cuguen",7,35531.4,682680.5],["La Boussac",8,35597.6,683382.5],["Saint-Broladre",12,35677.9,684198.5],["Broualan",5,35644.5,682939.7],["Saint-Léger-des-Prés",2,35613.4,682056],["Saint-Marcan",3,35840.6,684196.4],["Noyal-sous-Bazouges",4,35799,682257.7],["Marcillé-Raoul",3,35934,681940.2],["Sains",4,36174.6,683781.6],["Saint-Rémy-du-Plain",13,36162.7,681747.6],["Vieux-Viel",4,36453.9,683308.8],["Romazy",5,36712.3,681790.9],["Val-Couesnon",38,36876.8,682707.8],["Chauvigné",8,36978.3,681779.8],["Saint-Marc-le-Blanc",16,37358.2,681628.5],["Trans-la-Forêt",5,36123.9,683171.6],["Pleine-Fougères",13,36325.9,683567.8],["Sougéal",1,36602.6,683275.2],["Saint-Georges-de-Gréhaigne",2,36461,683946.4],["Roz-sur-Couesnon",8,36155.8,684201.1],["Rimou",0,36612,682045.9],["Bazouges-la-Pérouse",14,36175.6,682394.6],["Maen Roch",45,37715.9,682121.8],["Saint-Grégoire",97,35200.7,679404.5],["Rennes",2659,35190.1,678931.7],["Montreuil-sur-Ille",29,35383,681097.7],["Saint-Médard-sur-Ille",18,35439.2,680721.8],["Saint-Germain-sur-Ille",18,35432.8,680450.9],["Feins",13,35627,681321],["Betton",172,35532.2,679702],["Aubigné",9,35652.7,680944.9],["Chevaigné",26,35624,680027.6],["Chantepie",117,35618.4,678650.9],["Mouazé",20,35805.9,680238.2],["Saint-Aubin-d'Aubigné",40,35839.5,680579.2],["Cesson-Sévigné",137,35766.4,678987.8],["Andouillé-Neuville",17,35970.8,680913.7],["Thorigné-Fouillard",66,35947.7,679353.6],["Saint-Sulpice-la-Forêt",23,36012.9,680078.9],["Sens-de-Bretagne",31,36405.4,681326.4],["Acigné",71,36288,679115.3],["Noyal-sur-Vilaine",56,36351.9,678892.1],["Gahard",27,36507.3,680927],["Ercé-près-Liffré",23,36489.7,680466.7],["Liffré",71,36552.6,679995.2],["Domloup",53,36331.9,678316.6],["Chasné-sur-Illet",27,36124.4,680276.9],["Chartres-de-Bretagne",95,34941.7,678162.1],["Poligné",4,35006.6,676446.4],["Orgères",68,35206.6,677642.8],["Pancé",11,35169.9,676388.1],["Noyal-Châtillon-sur-Seiche",86,35279.8,678163],["Crevin",32,35210.2,676984.5],["Saint-Erblon",43,35342.9,677885],["Chanteloup",24,35578.4,677306],["Bourgbarré",52,35604.5,677612.3],["Le Petit-Fougeray",10,35603.6,676859.9],["Vern-sur-Seiche",61,35729.1,678156.8],["La Bosse-de-Bretagne",13,35621.3,676219.9],["Saint-Armel",27,35769.2,677815.3],["Corps-Nuds",35,35788.3,677423.5],["Saulnières",17,35773.6,676708.6],["Nouvoitou",54,36140.6,678103.6],["Brie",8,36135.3,677093.5],["La Couyère",3,36337.7,676374.8],["Amanlis",24,36639.7,677664.9],["Coësmes",18,36810.8,676290.3],["Le Theil-de-Bretagne",9,36935.8,676703.5],["Boistrudan",5,37168.8,677243.4],["Sainte-Colombe",4,36710.1,676352.7],["Tresboeuf",15,36024.9,676332.6],["Pont-Péan",51,34931,677828.2],["Janzé",72,36444.9,677166.7],["Essé",11,37005.8,677118.1],["Le Sel-de-Bretagne",9,35581.6,676507.7],["Thourie",6,36515.7,675996.4],["Bain-de-Bretagne",64,34991,675953.3],["Saint-Sulpice-des-Landes",9,35403.7,675079.6],["Teillay",8,36044.4,675493.3],["Ercé-en-Lamée",19,35897.4,675755.6],["La Dominelais",9,34902.7,675059.8],["Lalleu",7,36291.1,676019.6],["Châteaugiron",105,36464.6,678158.9],["Piré-Chancé",42,36990.6,677694.5],["Saint-Jacques-de-la-Lande",207,34924.7,678605.3],["Le Rheu",111,34337.9,678865.3],["Cintré",24,33755.4,678959.2],["Talensac",18,33340.1,679010.6],["Saint-Gonlay",8,32321.1,679133.8],["La Chapelle-Thouarault",25,33815.2,679153.2],["L'Hermitage",55,34177.4,679173],["Breteil",34,33583.9,679409.5],["Pacé",109,34525.1,679364.9],["Saint-Gilles",65,34111.7,679477.2],["Montgermont",35,34951,679441.2],["La Nouaye",4,33010.4,679634.9],["Boisgervilly",16,32356.3,679721.8],["Saint-Uniac",9,32636.5,679785],["Clayes",14,33946.2,679731.6],["La Chapelle-des-Fougeretz",55,34843.4,679684.7],["Pleumeleuc",47,33460.1,679834.8],["Parthenay-de-Bretagne",28,34119.3,679891.9],["Romillé",40,33684.3,680183.1],["La Mézière",51,34713.5,680164.4],["Gévezé",77,34456.4,680194.4],["Langan",17,33996.7,680498.7],["Irodouër",24,33290.1,680579.8],["Vignoc",28,34510.3,680504.7],["Langouet",4,34209.6,680535.4],["Saint-Gondran",9,34134.3,680730.4],["Médréac",20,32427,680845.1],["La Chapelle-Chaussée",10,34011.9,680780],["Cardroc",6,33757,680952.9],["Saint-Pern",7,33034.9,681022.6],["Les Iffs",1,33926.3,680977],["Saint-Brieuc-des-Iffs",0,34053.6,681020.8],["Hédé-Bazouges",23,34407.4,681028.8],["Bécherel",11,33346.1,681107.2],["Miniac-sous-Bécherel",10,33446.2,680962.2],["Vezin-le-Coquet",86,34637.3,679050.2],["Guipel",23,34983,681028.5],["Montreuil-le-Gast",17,34918.7,680458.7],["Melesse",96,35129,680100.2],["Landujan",15,32929.5,680619.3],["Bléruais",2,31893.4,679137.3],["Plouasne",14,32896.4,681175.6],["La Chapelle du Lou du Lac",6,32943.1,680206.8],["Bédée",61,33280.7,679809.8],["Montfort-sur-Meu",65,33148.6,679364.3],["Montauban-de-Bretagne",58,32508.9,680073.7],["Saint-Symphorien",8,34262.4,680996],["Renac",12,32720.9,674718.4],["Grand-Fougeray",22,34548.6,674640.4],["La Noë-Blanche",9,34525.2,675533.8],["Pléchâtel",33,34518.7,676576.6],["La Chapelle-Bouëxic",17,33133.8,677035.7],["Bovel",6,32874,677289.8],["Lassy",22,33668.6,677547.2],["Maxent",17,32466.2,677663.2],["Goven",56,33885.8,677844.4],["Bruz",165,34641.6,677997.1],["Treffendel",17,32718.1,678264.1],["Saint-Péran",4,32341.1,678461.7],["Monterfil",14,32935,678572.4],["Mordelles",62,33925.5,678582.5],["Chavagne",45,34340.8,678325.7],["Saint-Thurial",22,33263,678132.9],["Baulon",31,33229.7,677645.4],["Laillé",58,34795.2,677479.4],["Guignen",50,33710.5,676884.5],["Saint-Senoux",19,34250.5,676686.5],["Saint-Ganton",5,33430.4,675066.8],["Saint-Malo-de-Phily",17,34238.7,676389],["Lohéac",10,33497.1,676315.1],["Bourg-des-Comptes",33,34629.3,676920.9],["Guichen",78,34225.6,677372.1],["Bréal-sous-Montfort",84,33778.8,678317.3],["Guipry-Messac",82,34053.2,675810.6],["Saint-Just",9,32861.6,675215.4],["La Chapelle-de-Brain",12,33014.2,674493.5],["Loutehel",1,32100,677185.9],["Langon",11,33666.4,674675],["Sainte-Anne-sur-Vilaine",8,33856.6,674767.4],["Bruc-sur-Aff",6,32446.8,675793.1],["Pipriac",46,33001.6,675701.2],["Sainte-Marie",9,32514,674453.5],["Saint-Séglin",10,32584.5,676230.2],["Bains-sur-Oust",27,31991.6,674610.3],["Saint-Perreux",7,31704.3,674209.9],["Lieuron",4,33047.3,676158.9],["Les Brulais",6,32344.8,676629.9],["Val d'Anast",34,32759.3,676628.6],["Mernel",9,32897.2,676691.7],["Bobital",17,32262.1,682485.5],["Quévert",32,32428.5,683041.2],["Le Hinglé",5,32396.2,682253.5],["Guenroc",0,32396.6,681407],["Saint-Maden",3,32409.7,681544.3],["Saint-Carné",6,32548.7,682482.7],["Trévron",9,32531.8,682194.7],["Pleurtuit",71,32689.8,684288.1],["Saint-Juvat",4,32653.2,681778.3],["La Richardais",14,32908.8,684586.9],["Calorguen",8,32810.3,682394.4],["Saint-Samson-sur-Rance",12,32880.2,683312.3],["Tréfumel",3,32777.8,681612.6],["Taden",23,32939,683116.2],["Le Minihic-sur-Rance",10,33052,684230.8],["Saint-André-des-Eaux",6,32930.9,681969.3],["Le Quiou",4,32927.3,681740.5],["Plouër-sur-Rance",42,33077.1,683701.2],["Langrolay-sur-Rance",7,33103,683982.1],["La Vicomté-sur-Rance",8,33208.8,683238.8],["Évran",16,33142,682065.7],["Les Champs-Géraux",5,33250,682461.7],["Saint-Hélen",17,33366.3,683052],["La Ville-ès-Nonais",15,33454.4,683885.9],["Tréméreuc",1,32663,684066.7],["Pleslin-Trigavou",49,32688.5,683777.7],["Saint-Jouan-des-Guérets",20,33361.9,684476],["Saint-Suliac",9,33348.1,684138.5],["Saint-Lunaire",16,32376.8,684955.4],["Saint-Thélo",4,26557.6,680818.2],["La Motte",35,27465.4,680829.3],["Le Quillio",7,26355.2,680966.7],["Grâce-Uzel",5,26975.2,680922.3],["Saint-Gilles-Vieux-Marché",0,25692,681048.9],["Saint-Mayeux",3,25468.5,681196.4],["Saint-Hervé",6,26807.3,681325.9],["Merléac",2,26276.4,681390.9],["Uzel",12,26709.8,681380.2],["Gausson",12,27363.4,681554.9],["Saint-Martin-des-Prés",1,25889.5,681741.3],["Allineuc",8,26493.5,681736.9],["Corlay",4,25129.5,681920.4],["Le Haut-Corlay",3,25143.1,681959.7],["Le Bodéo",1,26051.1,681897.4],["La Harmoye",8,25862.3,682060],["Ploeuc-L'Hermitage",43,27384.5,682071.3],["Lanfains",6,26224.9,682209],["Saint-Bihy",4,25828.7,682547.1],["Le Vieux-Bourg",5,25605.4,682664.4],["Saint-Brandan",30,26581.4,682610.6],["Saint-Carreuc",17,27599.2,682616.7],["Quintin",18,26278.9,682783.9],["Plaintel",60,26982,682779.6],["Saint-Connan",2,25180.6,683027.6],["Saint-Gildas",3,25621.8,683050],["Senven-Léhart",0,25144.8,683127.5],["Le Foeil",14,26285.6,683066.8],["Le Leslay",2,25907.4,683104.9],["Brélidy",5,24242.5,685838.2],["Tonquédec",9,22957,686023.7],["Cavan",22,23310.8,686015.4],["Coatascorn",4,24022.7,685974.6],["Prat",11,23679.8,686040.3],["Berhet",4,23564.1,686246.8],["Ploubezre",43,22602.3,686422.8],["Caouënnec-Lanvézéac",5,23135,686387.2],["Mantallot",1,23702.2,686364.7],["Ploëzal",12,24398.9,686396.8],["Quemperven",4,23538.1,686571],["Rospez",17,23102.7,686683.6],["Lannion",144,22545.1,686741.8],["Lanmérin",3,23345.6,686776.5],["La Roche-Jaudy",22,23996.1,686794.3],["Langoat",11,23861.8,686843.7],["Troguéry",2,24284,686845.1],["Trézény",2,23246.4,686976.2],["Coatréven",7,23425,687076.6],["Kermaria-Sulard",16,23219.1,687135.3],["Minihy-Tréguier",8,24275.2,687085],["Camlez",8,23713,687147.2],["Trédarzec",3,24496.6,687196.8],["Tréguier",14,24264.7,687230.6],["Saint-Quay-Perros",9,22692.2,687398.6],["Louannec",20,22942.6,687404.6],["Plouguiel",11,24225.6,687334.9],["Trélévern",6,23250.6,687541],["Penvénan",11,23804.4,687531.1],["Perros-Guirec",24,22727.6,687656.7],["Kerbors",1,24648.7,687651.5],["Plougrescant",9,24336.5,687826.1],["Plouëc-du-Trieux",10,24461.7,685949.2],["Trévou-Tréguignec",19,23360.4,687562.5],["Runan",2,24295.6,686176.7],["Plounérin",16,21788.2,684955.4],["Plouigneau",45,20615.9,685068.8],["Plouégat-Moysan",8,21299.6,685067.6],["Garlan",11,20237.7,685477.2],["Trémel",4,21305.3,685418.7],["Plufur",5,21575.5,685424.6],["Lanvellec",4,21853.8,685550.7],["Plouezoc'h",21,19797.5,685946],["Plouzélambre",1,21832.9,685815],["Lanmeur",15,20588,685955.9],["Tréduder",6,21699.8,685896.5],["Plestin-les-Grèves",15,21216.2,685982.2],["Guimaëc",9,20661,686181.5],["Ploumilliau",25,22028.5,686195.6],["Locquirec",6,21122,686400.6],["Plougasnou",11,20085.6,686539],["Trédrez-Locquémeau",11,21728,686434.9],["Ploulec'h",15,22204.2,686616.6],["Trébeurden",23,21796.6,687217.8],["Pleumeur-Bodou",28,22160.7,687238.3],["Trégastel",21,22223.8,687716.6],["Saint-Jean-du-Doigt",3,20213.4,686517.2],["Plouégat-Guérand",7,20860.2,685642.5],["Saint-Michel-en-Grève",2,21726.3,686280.8],["Morlaix",118,19693.1,685259.1],["Pontrieux",8,24689.4,686180.6],["Pleumeur-Gautier",5,24814.7,687364.5],["Guingamp",86,24679.1,684665.6],["Pleudaniel",9,24898.6,686965.6],["Pleubian",11,24984.5,687775.2],["Lézardrieux",9,25184.6,687137.6],["Saint-Gilles-les-Bois",4,25074.7,685653.6],["Saint-Péver",7,24955.4,683753.4],["Pommerit-le-Vicomte",23,25152.3,685290.9],["Plourivo",21,25395.6,686663.2],["Saint-Fiacre",1,25242.8,683519.9],["Trévérec",2,25416.2,685666.6],["Yvias",8,25513.8,686316.9],["Gommenec'h",6,25466.7,685500.8],["Paimpol",38,25595.5,687031.9],["Lanleff",0,25546.4,686090.3],["Ploubazlanec",16,25757.9,687264.3],["Île-de-Bréhat",2,25998.3,687711.2],["Lanmodez",2,25223.7,687753.9],["Plésidy",6,24772.8,683396.2],["Saint-Adrien",0,24709.5,683858.1],["Quemper-Guézennec",13,25102.6,686224.5],["Trégonneau",3,24601.8,685238.6],["Saint-Clet",10,24879.1,685799.5],["Pabu",12,24786,684939.2],["Ploumagoar",54,24784.5,684468.6],["Squiffiec",4,24697.9,685414.5],["Saint-Agathon",12,24992.5,684623.4],["Le Merzer",12,25285,684780.6],["Le Faouët",6,25328.5,685985.4],["Plouézec",20,26042.5,686663.5],["Saint-Abraham",4,29564.8,676455.1],["Réminiac",4,30860.4,676405.8],["Caro",9,30247.6,676481.8],["Val d'Oust",34,29291.5,676557.3],["Monteneuf",14,31080.2,676530.3],["Comblessac",8,32019.2,676514.3],["Montertelot",7,29503.4,676731.2],["Porcaro",6,31185.9,676932],["Guillac",6,29197.7,677083.2],["Augan",16,30594.1,677078.6],["Gourhel",5,30002.2,677323.6],["Campénéac",30,30522,677504.6],["Taupont",17,29434.8,677590.9],["Saint-Malo-de-Beignon",2,31578.3,677451],["Beignon",22,31439.1,677591.9],["Helléan",3,29183.9,677762.2],["Loyat",12,29882.6,677901.4],["Plélan-le-Grand",45,32017.7,677915.2],["Tréhorenteuc",1,30601,678079.9],["Néant-sur-Yvel",12,30305.1,678144.3],["Saint-Malo-des-Trois-Fontaines",8,29230,678229.1],["Paimpont",15,31455,678143.3],["Guilliers",8,29760.1,678513.3],["Guer",79,31772.5,676831.8],["Ploërmel",76,29728.9,677252.4],["Plorec-sur-Arguenon",2,30877.8,683301],["Saint-Pôtan",5,30975.4,684166.2],["Matignon",7,31034,684575.2],["Pluduno",22,31133.2,683872.7],["Trémeur",8,31032,681819.4],["Bourseul",14,31153.9,683345.6],["Saint-Méloir-des-Bois",4,31210.4,683034.9],["Mégrit",10,31175.6,682125.8],["Trédias",1,31231,681931.7],["Plancoët",17,31364.6,683744.4],["Saint-Lormel",6,31418.5,684022.8],["Plélan-le-Petit",19,31424,682754.2],["Saint-Michel-de-Plélan",6,31480.3,683107.3],["Créhen",9,31540.8,683991.1],["Languédias",6,31446.6,682260.1],["Saint-Maudez",6,31715,682953.1],["La Landec",9,31720.1,682754.8],["Yvignac-la-Tour",11,31686.8,681769.1],["Trébédan",1,31750.9,682359.8],["Corseul",17,31838.1,683260.5],["Vildé-Guingalan",11,31893,682784.7],["Beaussais-sur-Mer",35,32116.2,684332.2],["Saint-Briac-sur-Mer",13,32193.8,684767.5],["Aucaleuc",6,32094.7,682964.2],["Brusvily",12,32069.3,682237],["Languenan",12,32159.3,683574.1],["Plumaudan",21,32065.8,681871.5],["Trélivan",23,32172.2,682710.3],["Dinard",56,32776.4,684874.3],["Dinan",90,32704.8,682901.7],["Lanvallay",29,32850,682909.9],["Saint-Malo",381,33026.1,685080.4],["Saint-Judoce",6,33334.6,681852.4],["Pleudihen-sur-Rance",20,33440.7,683485.2],["Saint-Jacut-de-la-Mer",3,31758,684561.5],["Saint-Cast-le-Guildo",14,31239,684930.1],["Lancieux",7,32051.3,684621.1],["Île-Tudy",7,16458.6,677342.9],["Dinéault",9,16853.6,681508.4],["Plomelin",32,16661.3,678354.7],["Cast",15,16988.7,680806.5],["Quéménéven",9,17086.7,680339.3],["Gouesnach",20,16920.1,678065.4],["Bénodet",27,16892.3,677681.2],["Quimper",595,17102.2,679003.5],["Châteaulin",33,17357.6,681200.9],["Port-Launay",4,17536.3,681408.8],["Clohars-Fouesnant",16,17280,677879.4],["Saint-Coulitz",5,17608.3,681125.9],["Landrévarzec",24,17519.5,680025],["Pleuven",31,17445.7,677973.8],["Lothey",6,17838.1,681011.4],["Ergué-Gabéric",80,17664.3,678965.5],["Saint-Évarzec",28,17638.1,678289.2],["Briec",56,17950.3,680101.5],["Landudal",15,18080.5,679667.5],["La Forêt-Fouesnant",26,17930.9,677946.2],["Edern",21,18128.4,680114.5],["Gouézec",12,18231.9,680834.4],["Saint-Yvi",40,18297,678570],["Concarneau",124,18335.5,677493.2],["Langolen",10,18579.5,679657.5],["Lennon",6,18811.8,681040.9],["Elliant",39,18668,678847.3],["Saint-Thois",1,18874.3,680720.6],["Trégourez",9,18989.2,680046.8],["Laz",9,19219.1,680396.7],["Melgven",34,18998.3,677828.8],["Coray",6,19183.2,679536.7],["Pleyben",24,18312.9,681456.7],["Trégunc",30,18819.5,677271.7],["Combrit",36,16596,677829.1],["Loctudy",10,16400,677234.5],["Châteauneuf-du-Faou",28,19431.6,680914.9],["Fouesnant",51,17667.4,677814.7],["Pluguffan",37,16526.3,678861.6],["Plogonnec",32,16519.6,679965.6],["Plestan",23,29737.1,682757.2],["La Bouillie",5,29920.1,684417.8],["Hénansal",7,29913.8,684052.1],["Quintenic",3,29946.3,683769.3],["Saint-Rieul",4,29956.8,682961.7],["Tramain",8,30039.1,682477.7],["Saint-Denoual",8,30147.7,683904.6],["Plurien",5,30224.7,684987],["Plénée-Jugon",22,30034.5,682068.8],["Plédéliac",22,30188.7,683010.4],["Hénanbihen",13,30337.3,684252.7],["Fréhel",11,30490.8,684982.4],["Ruca",5,30640.4,684301.2],["Sévignac",7,30467.6,681697],["Pléboulle",3,30686.8,684758.3],["Landébia",2,30617.9,683670.5],["Plévenon",6,30760.8,685269.2],["Jugon-les-Lacs - Commune nouvelle",26,30646.1,682536.3],["Évriguet",1,29741.8,678907.6],["Mauron",26,30685.2,678910.8],["Saint-Brieuc-de-Mauron",0,30089.6,679019.2],["Saint-Léry",0,30902.2,678967.4],["Saint-Malon-sur-Mel",13,32052.4,678927.9],["Brignac",3,29934.3,679366.6],["Saint-Maugan",3,32204.4,679380.3],["Ménéac",11,29405.2,679607.6],["Illifaut",6,30258.2,679632.2],["Saint-Méen-le-Grand",53,31439,680039.6],["Merdrignac",19,29821.6,680161.9],["Trémorel",15,30721.7,680175.9],["Saint-Vran",8,29633.7,680699.6],["Lanrelas",7,30726.1,680770.3],["Plumaugat",10,31142.5,680790.6],["Mérillac",3,29981.4,680884.5],["Saint-Jouan-de-l'Isle",2,31727.4,680880.4],["Éréac",11,30358.3,681058.4],["Caulnes",19,31783.2,681117.6],["Guitté",12,32240.7,681183.8],["Rouillac",5,30249.2,681451.9],["Broons",23,31019.5,681486.3],["Iffendic",56,32576.7,679293.9],["Concoret",3,31242,678649.1],["Loscouët-sur-Meu",8,31057.5,679953.5],["Le Verger",23,33286,678596.6],["Quédillac",13,31864.6,680673.3],["La Chapelle-Blanche",2,31855.6,680861.4],["Le Crouais",3,31836.3,680202.9],["Gaël",18,31179.5,679409.9],["Muel",6,31656,679333.7],["Saint-Onen-la-Chapelle",14,31577.3,679888.4],["Saint-Jean-la-Poterie",10,31533.1,673875.8],["Limerzel",11,29819.6,673992.2],["Allaire",27,31262.2,673903.2],["Saint-Gorgon",0,30722.3,674065.3],["Redon",73,31861.5,674009.8],["Malansac",17,30276.4,674410.5],["Saint-Jacut-les-Pins",16,30902.6,674452.7],["Pluherlin",14,29811,674656.9],["Rochefort-en-Terre",4,30003.9,674673.8],["Saint-Vincent-sur-Oust",24,31427.6,674585],["Peillac",9,30884.6,674771.6],["Saint-Gravé",8,30435.6,674943.1],["Molac",15,29288.6,675075.3],["Les Fougerêts",6,30963.9,675048.6],["Saint-Martin-sur-Oust",12,30660.2,675137.8],["Cournon",6,31774.6,675079.7],["Pleucadeuc",12,29772.5,675357.4],["La Gacilly",34,31565.7,675318.5],["Saint-Congard",4,30200.5,675437.4],["Sixt-sur-Aff",20,31982.9,675396.1],["Bohal",4,29310.7,675635.5],["Saint-Laurent-sur-Oust",2,30203.2,675729.9],["Saint-Nicolas-du-Tertre",0,30950.1,675762.9],["Saint-Marcel",10,29471.3,675877.3],["Malestroit",13,29738,675926.4],["Carentoir",30,31619.7,675843.1],["Ruffiac",10,30503,675969.9],["Missiriac",15,30001.9,676192.9],["Tréal",7,30953,676166],["Questembert",74,29120.9,674296.4],["Caden",15,30341.2,673896.8],["Camoël",6,29384.9,672282.4],["Pénestin",4,28796.4,672337.2],["Férel",29,29794.2,672273.3],["Arzal",17,29569.1,672669.6],["La Roche-Bernard",5,30121.5,672653.9],["Saint-Dolay",28,31259.8,672873.1],["Muzillac",20,28798.9,673150.2],["Théhillac",8,31555.8,673093.5],["Péaule",27,29764.2,673348.1],["Le Guerno",4,29386.1,673440.1],["Noyal-Muzillac",13,29020.9,673546.7],["Béganne",11,30656,673476.5],["Rieux",19,31649.4,673433.7],["Marzan",22,29965.1,672909.4],["Billiers",7,28735.4,672878.6],["Nivillac",46,30294.3,672829.1],["Plouguenast-Langast",14,27724.8,681311.3],["Pleugriffet",10,27627.9,678076.8],["Hénon",17,27952.1,682463.1],["Plémy",17,27920.7,681910.4],["Saint-Étienne-du-Gué-de-l'Isle",4,28005,679302.8],["La Prénessaye",13,28153.6,680176.1],["Forges de Lanouée",18,28397.8,678155.9],["Plumieux",12,28493.2,679259.3],["Bréhand",13,28751.4,682597.8],["Trébry",9,28892.8,682053.9],["Saint-Trimoël",10,28941.9,682405.1],["Landéhen",13,29051.8,682877.5],["Mohon",6,28862.2,678697.5],["Saint-Glen",7,29118.1,682088],["La Croix-Helléan",8,28968.8,677613.9],["La Grée-Saint-Laurent",1,29019.2,678038.5],["Penguily",10,29333.5,682220.5],["La Malhoure",3,29356.7,682483.8],["Gomené",5,29248,680013.8],["Saint-Barnabé",15,27616.9,679712],["Buléon",3,27654,677450.8],["Radenac",14,27394.6,677780.2],["Lantillac",2,27857.4,677692.9],["Guégon",23,28475.4,677441.3],["Laurenan",6,28914.3,680321.2],["Quessoy",50,28178.2,682843.4],["Le Mené",66,29079.1,681376.1],["La Trinité-Porhoët",2,28735.1,679198.9],["Trédaniel",11,28415.8,682142.7],["La Chèze",6,27946.9,679634.3],["Moncontour",5,28322.5,682166.3],["Josselin",12,28633.4,677602.8],["Plémet",30,28483.8,680116.4],["Bréhan",24,27676.1,678868.7],["Île-aux-Moines",0,26112.6,673810.8],["Moustoir-Ac",19,26413.8,676673.1],["Arradon",28,26307,674140.2],["Moréac",35,26563.9,677363.3],["Colpo",28,26552.5,676238.7],["Île-d'Arz",1,26431.7,673700.6],["Locmaria-Grand-Champ",27,26674.6,675555.4],["Sarzeau",46,26633.3,673001.2],["Locqueltas",30,26841.8,675548.4],["Meucon",22,26820.9,675094.6],["Vannes",516,26796.7,674443.1],["Saint-Allouestre",8,27279.7,677218.1],["Saint-Jean-Brévelay",26,27246.6,676491.7],["Le Hézo",6,27181.5,673602.8],["Plaudren",16,27396.1,675742.6],["Monterblanc",30,27473.8,675337.2],["Saint-Nolff",32,27652.1,674878.7],["Theix-Noyalo",75,27605.3,674062.5],["Le Tour-du-Parc",11,27558.2,672912.1],["Plumelec",31,27848,676364.9],["Guéhenno",9,27895,676981.2],["Billio",2,27923.9,676704.9],["Treffléan",21,27912.9,674613],["Cruguel",7,28192.1,676794.2],["La Trinité-Surzur",21,28023.7,673748.5],["Elven",81,28127.2,675152.2],["Damgan",7,28051.7,672810.6],["Sulniac",43,28232.1,674530],["La Vraie-Croix",14,28448.8,674676.7],["Lizio",9,28709.6,676585],["Larré",10,28679.1,674907.2],["Saint-Servant",7,28849.2,677159],["Saint-Guyomard",22,28745.2,675669.8],["Le Cours",9,28805.4,675227.5],["Surzur",35,27722.8,673477.5],["Trédion",15,28172.4,675839.4],["Saint-Armel",3,27096.3,673458.3],["Berric",28,28538.8,674034.4],["Séné",60,26941.8,674004.7],["Lauzach",12,28382.8,673833.6],["Grand-Champ",65,26266.8,675593.5],["Plescop",43,26501.3,674908],["Saint-Avé",104,27010.7,674780.1],["Ambon",15,28262.1,673191],["Sérent",37,28830.4,676125.6],["Bignan",24,26879.8,676900.8],["Locminé",50,26427,677039.9],["Saint-Gildas-de-Rhuys",8,26109.9,672733],["Boqueho",8,25993.6,683695.7],["Ploufragan",109,27221.8,683667.5],["Trégueux",64,27645.9,683647.8],["Coëtmieux",20,28649.2,683590.9],["Plouvara",15,26350.8,683953.2],["Plérin",102,27438.8,684164.4],["Châtelaudren-Plouagat",44,25756.4,684307.8],["Bringolo",4,25756.1,684752.8],["Pléneuf-Val-André",28,29169.1,684607.4],["Lantic",20,26556,684939.2],["Tréguidel",11,26216.3,685010.9],["Goudelin",13,25688.3,685072],["Tressignaux",7,25932.1,685175.6],["Binic-Étables-sur-Mer",40,27035.3,685215.4],["Erquy",17,29752.4,685041.4],["Plourhan",15,26788.2,685277],["Lanvollon",14,25933.3,685359.3],["Pléguien",18,26269.7,685382.4],["Lannebert",3,25779.5,685658.2],["Pludual",6,25989.9,685740.4],["Tréméven",2,25651.2,685847.2],["Plouha",26,26364.5,685814.6],["Lanloup",3,26160.5,686250.8],["Kerfot",4,25712.7,686548.7],["Saint-Jean-Kerdaniel",7,25609.7,684643.3],["Trégomeur",6,26631.2,684572.4],["Lanrodec",13,25500.2,684111.8],["Hillion",45,28175.6,683869.4],["Andel",14,28903.8,683569.8],["Yffiniac",68,28087.1,683554.9],["Cohiniac",9,26047.3,683453.4],["Saint-Julien",18,27030.1,683274.5],["Plédran",77,27547.7,683165.3],["Plaine-Haute",27,26739.5,683225.1],["Pommeret",22,28446.7,683281.1],["La Méaugon",21,26897.3,683811.8],["Saint-Donan",17,26548.9,683510.6],["Trémuson",26,26856.5,684082.5],["Tréveneuc",5,26797.1,685644.3],["Langueux",87,27815.1,683682.2],["Noyal",17,29465.9,683038.6],["Plerneuf",17,26574.1,684016.1],["Pléhédel",11,25816.9,686085.2],["Saint-Brieuc",460,27466.4,683925.1],["Lamballe-Armor",139,29250.6,683295.7],["Pordic",66,27119.2,684569.4],["Plélo",44,26162.8,684495.1],["Saint-Alban",16,29203.6,684287],["Saint-Quay-Portrieux",11,27085.7,685493.6],["Saint-Thuriau",20,25684.5,678512.6],["Guern",14,24637.1,678740.8],["Crédin",9,27053.6,678611.4],["Le Sourn",18,25409.7,678841.3],["Kerfourn",5,26567.7,678759.2],["Pontivy",143,25589.1,679058.2],["Noyal-Pontivy",40,26236.8,679041.7],["Rohan",9,27194.8,678992.4],["Malguénac",30,24969.2,679289.3],["Gueltas",9,26895.9,679289.1],["Saint-Gérand",10,26225.4,679506.2],["Saint-Maudan",6,27058.6,679483.9],["Saint-Gonnery",15,26735,679643.9],["Neulliac",15,25527.1,679779.1],["Kergrist",7,25758.6,679953],["Hémonstoir",7,26685.1,680047],["Loudéac",108,27282.6,680180.2],["Saint-Connec",6,26035.5,680285.1],["Saint-Aignan",2,25335.8,680382.7],["Saint-Caradec",11,26569.9,680399.7],["Guerlédan",12,25559.5,680589.6],["Trévé",17,26989.8,680603.1],["Caurel",0,25215.4,680777],["Cléguérec",16,24883.7,679779.3],["Réguiny",7,27171,677958.9],["Évellys",38,26538,678155.6],["Erdeven",31,23821.3,674480.2],["Quistinic",11,24215.2,677387.5],["Saint-Pierre-Quiberon",11,23906.7,673118.6],["Landaul",33,24514.9,675619.4],["Saint-Barthélemy",12,24909.2,677572.8],["Camors",27,25163.6,676653.3],["Brech",72,25082,675263.9],["Auray",120,25137,674657.1],["Pluneret",70,25334.4,674738.4],["Bono",17,25382,674348.5],["Brandivy",12,25509.7,675835.2],["Locmariaquer",5,25342.2,673566.2],["La Chapelle-Neuve",12,25616.6,676829.4],["Plumergat",55,25685.9,675446.7],["Plougoumelen",15,25621.2,674473.6],["Plumelin",28,26022,676760.3],["Hoedic",1,25654.2,670979],["Ploeren",65,26005.2,674481.1],["Landévant",45,24182,675823.1],["Ploemel",33,24463.7,674536.4],["Baden",24,25583.1,674093],["Crach",24,24967.8,674114],["Bangor",10,23294.3,670890.9],["Arzon",3,25727.6,673291.9],["Saint-Philibert",7,24940,673781.6],["Melrand",10,24457.2,678212],["Le Palais",19,23561.8,671221.3],["Île-d'Houat",1,25114.8,671583.4],["Plouharnel",15,24113.4,673974.1],["Pluvigner",73,25035.5,675900.5],["Sauzon",5,23086,671527.3],["Baud",63,25030.2,676978.9],["Sainte-Anne-d'Auray",18,25415.9,675048],["Larmor-Baden",5,25719.3,673729.4],["Guénin",23,25368,677325.6],["Locoal-Mendon",30,24272,675237],["Locmaria",3,24068.1,670589.5],["La Trinité-sur-Mer",3,24738.8,673778.6],["Quiberon",34,23950,672691],["Carnac",16,24361.9,673806.1],["Pluméliau-Bieuzy",34,25462.4,677883.7],["Cléguer",27,22303.5,676961.6],["Larmor-Plage",50,22179.9,675330.8],["Lorient",642,22348.6,675786.3],["Le Croisty",10,22651.6,679294.3],["Gâvres",3,22399.5,675206.7],["Saint-Caradec-Trégomel",4,22708.5,678979.9],["Locmiquélic",21,22514.7,675526.4],["Saint-Tugdual",5,22862.8,679661.8],["Plouay",53,22731.9,677621.5],["Calan",15,22777.9,677164],["Ploërdut",5,23228.9,679488.3],["Inguiniel",26,23173.8,678260.2],["Hennebont",158,23078.2,676372.4],["Lignol",6,23302.2,678928.2],["Kervignac",65,23303.9,675889.3],["Langoëlan",3,23658.1,679822.7],["Étel",10,23497.2,674677.5],["Persquen",2,23867.8,678812],["Brandérion",21,23671.8,676189.6],["Locmalo",4,23960.6,679265.5],["Bubry",15,23980.5,678062.1],["Belz",22,23759.6,674867.3],["Séglien",1,24202.3,679639.6],["Languidic",80,23973.5,676615.7],["Lanvaudan",6,23261.1,677405.5],["Sainte-Hélène",12,23536.9,675373.8],["Plouhinec",32,23155.7,675156.6],["Riantec",50,22733.4,675351],["Merlevenez",28,23321.6,675577.3],["Lanester",207,22501.9,675945.5],["Ploemeur",106,21888.5,675697.2],["Kernascléden",1,22908,678605.8],["Port-Louis",7,22387.9,675340],["Caudan",51,22598.1,676459.6],["Nostang",22,23676,675696.5],["Inzinzac-Lochrist",58,23175.7,676787],["Priziac",10,22294.1,679271.3],["Guémené-sur-Scorff",4,23808.2,679224.8],["Groix",12,21584.5,674626.3],["Sainte-Brigitte",3,24476.5,680255.6],["Mellionnec",1,23241.7,680470.7],["Plélauff",2,23910.7,680779.4],["Glomel",11,22565,681064.1],["Gouarec",2,24167.1,680974.5],["Paule",10,22211.2,681237],["Bon Repos sur Blavet",10,24586.3,681109.5],["Sainte-Tréphine",1,24381,681428.4],["Saint-Igeaux",1,24740.3,681449.1],["Plussulien",2,25014.8,681534.7],["Maël-Carhaix",15,22402.5,681746.4],["Plounévez-Quintin",9,23830.9,681711.1],["Locarn",3,22439.5,682156],["Trémargat",0,23599.5,682195.9],["Canihuel",1,24799.5,682172.9],["Lanrivain",4,24000.2,682333.9],["Peumerit-Quintin",0,23581.1,682523.1],["Saint-Gilles-Pligeaux",2,24920.3,682634.3],["Plouguernével",10,23617.7,681148.2],["Kergrist-Moëlou",5,23207.8,681985.7],["Lescouët-Gouarec",3,23673.6,680279.4],["Callac",12,22480.7,683092.9],["Saint-Servais",5,22766.5,682885.6],["Saint-Nicodème",1,23078.9,682353.2],["Magoar",0,24249,682866.3],["Kerien",2,24064,682804.6],["Kerpert",2,24618.4,682623.9],["Maël-Pestivien",1,23445.6,682897.8],["Duault",5,22367.2,682630],["Saint-Nicolas-du-Pélem",4,24348.6,681942.8],["Rostrenen",23,23115.5,681170.1],["Silfiac",1,24251.4,680103.5],["Pont-Melvez",8,23420.3,683636.8],["Bourbriac",18,24307,683720.9],["Gurunhuel",3,23524.8,684249.3],["Loc-Envel",0,22717.1,684321.5],["Coadout",6,24349,684206.1],["Moustéru",3,23963.9,684239.5],["Belle-Isle-en-Terre",11,22843.7,684614.2],["Plounévez-Moëdec",18,22502,684776.9],["Grâces",21,24407,684639.2],["Tréglamus",13,23755.9,684691],["Louargat",28,23268.8,684837.8],["Plouisy",21,24426.2,684878.9],["Pédernec",22,23808.8,685142.7],["Trégrom",2,22828.2,685249],["Le Vieux-Marché",13,22497.8,685354.7],["Saint-Laurent",6,24098.3,685367.5],["Kermoroc'h",2,24304.8,685387.5],["Bégard",46,23619.7,685520.1],["Landebaëron",2,24298.6,685535.5],["Pluzunet",8,23108.7,685691.5],["Plougonver",4,22921.8,683953.5],["Bulat-Pestivien",3,23227.1,683302.2],["La Chapelle-Neuve",1,22584.2,683722.4],["Plouaret",21,22333.7,685413.7],["Tréogan",0,21605.1,680751.1],["Spézet",14,20150.4,680924.1],["Motreff",2,21357.9,680928.1],["Saint-Hernin",4,20780.7,681155.8],["Plévin",6,21757.1,681174.1],["Landeleau",6,20088,681316.5],["Cléden-Poher",17,20545.1,681367.7],["Le Moustoir",5,21760.5,681620.4],["Kergloff",9,20916.9,681770.3],["Carhaix-Plouguer",44,21280.4,681756],["Collorec",5,19808.2,682001.2],["Plounévézel",7,21189,682022.9],["Treffrin",4,21726.2,681988.4],["Trébrivan",5,22046.2,682058.1],["Plouyé",3,20124.7,682282.6],["Poullaouen",17,20835.9,682510.7],["Huelgoat",3,20105.4,682843.5],["Plusquellec",7,22046.7,682917.1],["Berrien",7,20089.7,683287.6],["Plourac'h",1,21620.9,683293.2],["Scrignac",7,20658.9,683570.3],["Calanhel",2,22117.6,683473],["Bolazec",2,21364.9,683629.8],["Lohuec",3,21841.2,683763.9],["Le Cloître-Saint-Thégonnec",1,19852.6,684149.2],["Lannéanou",6,20759.7,684182],["Plougras",1,21589.8,684350.3],["Guerlesquin",3,21407.1,684446.4],["Loguivy-Plougras",3,22151.9,684430.7],["Botsorhel",4,21020.1,684579.7],["Plourin-lès-Morlaix",34,19937.2,684764.7],["Plougonven",26,20492,684554.6],["Carnoët",5,21766.4,682735.3],["Rosporden",73,19101.2,678414],["Névez",16,19225.1,676836.6],["Leuhan",5,19573.8,679929.3],["Roudouallec",6,20058.3,680191.6],["Riec-sur-Bélon",31,19992.2,677037.2],["Guiscriff",11,20546.6,679286.1],["Le Trévoux",18,20432.4,677579.3],["Moëlan-sur-Mer",44,20446.6,676688.3],["Saint-Thurien",10,20620.5,678283.8],["Gourin",18,20919.9,680272.6],["Baye",8,20670.5,677150.1],["Mellac",36,20922.1,677637.8],["Le Saint",1,21200.2,679686.7],["Lanvénégen",5,21275.6,678655.2],["Querrien",11,21261.2,678230.8],["Tréméven",23,21235.5,677560.1],["Langonnet",15,21733.1,679800.5],["Guidel",84,21466.7,676316.6],["Locunolé",16,21685.2,677943.7],["Rédené",22,21739.3,677079.7],["Gestel",16,21823.2,676452.7],["Arzano",17,21931.7,677528.2],["Meslan",10,22074.7,678546.6],["Quéven",60,21988.6,676283.3],["Guilligomarc'h",12,22142.3,677897.7],["Pont-Scorff",40,22179.5,676772.3],["Berné",16,22368.5,678540.3],["Plouray",4,22536.3,680199.4],["Bannalec",47,20060.4,678030],["Tourch",13,19181.9,679143],["Saint-Goazec",4,19621.9,680632.6],["Clohars-Carnoët",31,20751.1,676449.3],["Le Faouët",15,21685.6,679003.9],["Quimperlé",108,21074.8,677295.9],["Scaër",46,20100.1,679076.4],["Pont-Aven",13,19625.8,677208],["Saint-Sauveur",10,18276.7,683932.1],["La Martyre",7,17131.5,684044],["Locmélar",7,17829.4,684030.7],["La Roche-Maurice",15,16831.1,684338.6],["Loc-Eguiner",1,17631.9,684273.9],["Plouédern",42,16530.7,684501.4],["Guimiliau",11,18350.5,684372.9],["Lampaul-Guimiliau",14,18043.3,684460.9],["Lanneuffret",0,16857.7,684618.6],["Trémaouézan",7,16484.7,684731.7],["Saint-Servais",9,17228.1,684736.5],["Plounéventer",20,16806.7,684816],["Saint-Derrien",14,17059.6,685155.9],["Guiclan",37,18683.1,685040.4],["Plougourvest",12,17783.7,685157.7],["Saint-Méen",16,16463.2,685363.4],["Plougar",11,17370.4,685289.8],["Plouvorn",38,18154.2,685414.8],["Lanhouarneau",9,16884,685532.9],["Saint-Vougay",13,17435.5,685640.6],["Plouzévédé",21,17617.1,685650],["Taulé",26,19191.3,685593.6],["Trézilidé",9,17820.5,685777.4],["Plounévez-Lochrist",25,16915.8,685947],["Mespaul",13,18290.3,685835],["Tréflez",6,16557.2,686043.7],["Tréflaouénan",6,17772.7,685988.5],["Plouénan",31,18536.4,685926.9],["Sibiril",9,18047.7,686379.8],["Plougoulm",14,18193.5,686388.9],["Carantec",10,19152.1,686310.6],["Santec",20,18339.9,686777.7],["Roscoff",15,18683.3,687005.7],["Île-de-Batz",2,18514.3,687225.9],["Ploudiry",14,17256.9,684087.1],["Pencran",21,16560.6,683977.3],["Bodilis",21,17524.5,684925.5],["Landerneau",135,16475.8,684130.5],["Landivisiau",106,17859.1,684657.6],["Cléder",22,17755,686386.5],["Saint-Pol-de-Léon",45,18637.4,686553.2],["Pleyber-Christ",37,19277.8,684483.6],["Locquénolé",6,19500.7,685799.2],["Henvic",8,19017.3,685929.4],["Sainte-Sève",10,19320.8,685070.5],["Plounéour-Ménez",9,19094.9,683766],["Saint-Martin-des-Champs",32,19575.6,685244.9],["Saint-Thégonnec Loc-Eguiner",27,18770.6,684709.9],["Plouescat",27,17232.7,686367.8],["Saint-Ségal",9,17602.3,681688.8],["Plonévez-du-Faou",20,19407,681654.1],["Pont-de-Buis-lès-Quimerch",37,17449.9,681854.1],["Le Cloître-Pleyben",8,18926.8,681748.1],["Rosnoën",5,16682.5,682023.2],["Lopérec",8,17781.3,682072.6],["Lannédern",3,18926.6,682243.6],["Loqueffret",2,19222.7,682419.5],["Hôpital-Camfrout",22,16397.7,682763.7],["Hanvec",24,16997.1,682713.6],["Saint-Rivoal",1,18230.6,682838.2],["Daoulas",16,16270.8,683147.6],["Saint-Eloy",3,17311,683063.5],["Irvillac",12,16656.4,683225.7],["Botmeur",0,18810.1,683171.9],["La Feuillée",4,19334.9,683204.6],["Le Tréhou",7,17281,683421.8],["Dirinon",24,16249.2,683560.3],["Saint-Urbain",15,16577,683557.5],["Tréflévénez",0,17010.9,683684.7],["Trégarvan",1,16443.7,681906.4],["Commana",6,18591.2,683527.4],["Brennilis",3,19310.2,682835.9],["Brasparts",9,18487.7,682272.8],["Landévennec",1,16172.3,682390.1],["Sizun",25,17679,683515.9],["Le Faou",28,16841.8,682349.7],["Plovan",4,15093,678289.8],["Tréguennec",0,15287.7,678005.8],["Douarnenez",86,15502.6,680214.1],["Pouldergat",8,15484,679670.3],["Tréogat",5,15374.4,678285.9],["Peumerit",8,15502.7,678525.7],["Plonéour-Lanvern",43,15641.3,678097.3],["Plomeur",32,15598.7,677413],["Guilvinec",9,15557.2,676894.1],["Saint-Jean-Trolimon",9,15639.9,677679.1],["Plogastel-Saint-Germain",26,15843.4,678957.4],["Gourlizon",11,15901.2,679380.1],["Treffiagat",22,15712.8,676977.5],["Ploéven",3,16295.6,680870.4],["Plomodiern",17,16321.5,681125.6],["Plobannalec-Lesconil",24,15982.6,677179.7],["Plonévez-Porzay",12,16340.8,680514.4],["Tréméoc",11,16196.7,678079],["Plonéis",33,16333.1,679288.2],["Guengat",17,16378.4,679584.8],["Saint-Nic",6,15976.9,681404.3],["Le Juch",5,16017.8,679873.9],["Pont-l'Abbé",56,16076.3,677651.7],["Penmarch",27,15163.5,677127.1],["Pouldreuzic",7,15151.9,678700.6],["Kerlaz",6,15924.1,680178.3],["Locronan",9,16423.9,680205.1],["Landudec",11,15356.6,679199.8],["Gouesnou",65,14876,684287.7],["Saint-Divy",13,15839.6,684224.8],["Kersaint-Plabennec",31,15577,684453.5],["Lanildut",7,12812.4,684732.6],["Lanrivoaré",14,13628.6,684659.1],["Brélès",16,13082.5,684754.3],["Saint-Thonan",32,15858.6,684494],["Milizac-Guipronvel",62,14120.1,684802],["Tréouergat",3,13915.9,684885],["Bourg-Blanc",36,14628.6,684845.6],["Plabennec",74,15234.4,684818.5],["Plourin",13,13312,685085.6],["Plouguin",22,13980.7,685195.9],["Plouvien",49,15065.4,685144.7],["Landunvez",5,13049.1,685371.6],["Le Drennec",14,15651.8,685135.2],["Ploudaniel",43,16089.9,685127],["Ploudalmézeau",50,13561.3,685405.8],["Tréglonou",17,14439.7,685435.8],["Lanarvily",5,15551.5,685347.2],["Trégarantec",11,16224,685285.3],["Loc-Brévalaire",2,15427.6,685389.3],["Lampaul-Ploudalmézeau",7,13596.9,685638.1],["Kernilis",15,15339.9,685579.7],["Landéda",32,14223.2,685862.7],["Kernouës",6,15901.3,685756.7],["Saint-Frégant",9,15756.4,685887.3],["Plouider",12,16265.4,685908.4],["Goulven",2,16270.9,686130.8],["Kerlouan",13,15802.1,686354.3],["Plounéour-Brignogan-plages",10,16122.6,686545.8],["Lampaul-Plouarzel",19,12693,684465.5],["Porspoder",10,12731.1,685136.9],["Coat-Méal",10,14361.2,684961.6],["Guissény",20,15468.4,686267.6],["Ouessant",5,10233,684790.5],["Lesneven",66,16058.6,685523.2],["Saint-Pabu",17,13991.6,685650.2],["Île-Molène",0,11202.3,684044.4],["Plouarzel",31,12893.7,684277.8],["Saint-Renan",82,13712.3,684205],["Plouguerneau",50,14757,686024],["Lannilis",44,14606.9,685634.5],["Le Folgoët",24,15959.1,685421.7],["Plozévet",18,14692.3,679131],["Guiler-sur-Goyen",5,15220.4,679403.8],["Primelin",2,13352,679676.9],["Île-de-Sein",1,11585,679965.7],["Plogoff",3,12942.8,679842.3],["Cléden-Cap-Sizun",7,13100.1,679964.9],["Goulien",2,13527.4,679995.2],["Beuzec-Cap-Sizun",6,14138.8,680160.3],["Lanvéoc",16,14735,682458.9],["Roscanvel",7,14136.4,682835.6],["Logonna-Daoulas",17,15969.8,682732.5],["Plougonvelin",30,12897,683239],["Le Conquet",15,12532,683497.8],["Trébabu",2,12806.4,683585.5],["Loperhet",45,15972,683334.1],["Brest",1498,14672.7,683635.6],["Ploumoguer",24,12939,683938],["Le Relecq-Kerhuon",118,15342.7,683752.5],["Guilers",80,14171.9,684042.8],["La Forest-Landerneau",28,15963,683919.4],["Bohars",23,14493.1,684075.2],["Locmaria-Plouzané",49,13485.5,683566.6],["Guipavas",160,15338.4,684073.2],["Plouzané",97,13804,683595.3],["Plouhinec",22,14255.7,679474.5],["Plougastel-Daoulas",114,15495.9,683348.2],["Camaret-sur-Mer",8,13719.8,682434.9],["Argol",8,15754.8,681914.2],["Poullan-sur-Mer",13,14858.9,680151],["Confort-Meilars",6,14742.4,679828.5],["Telgruc-sur-Mer",16,15464.9,681773.1],["Pont-Croix",10,14296.1,679760.3],["Mahalon",10,14659.6,679651.2],["Crozon",52,14489.6,682023.2],["Audierne",19,13890.8,679580.8]];
+</script>
+<script>
+(() => {
+  'use strict';
+  const LP = window.LabelPlacer;
+  const NS = 'http://www.w3.org/2000/svg';
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fmt = new Intl.NumberFormat('fr-FR');
+  const fmt1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
+  const fmt2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pct = (v) => fmt1.format(v) + ' %';
+  const $ = (id) => document.getElementById(id);
+
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    if (attrs)
+      for (const k in attrs) {
+        if (k === 'text') e.textContent = attrs[k];
+        else if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]);
+      }
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function clear(svg) {
+    for (const c of [...svg.childNodes]) if (c.nodeName !== 'title' && c.nodeName !== 'defs') svg.removeChild(c);
+  }
+  function svgPoint(svg, e) {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const pts = (line) => line.map(([x, y]) => r1(x) + ',' + r1(y)).join(' ');
+
+  const POS = {
+    'top-right': 'en haut à droite', 'top-left': 'en haut à gauche', 'bottom-right': 'en bas à droite',
+    'bottom-left': 'en bas à gauche', right: 'à droite', left: 'à gauche', top: 'au-dessus', bottom: 'en dessous',
+    inside: 'dans le symbole', center: 'au centre', pinned: 'épinglée'
+  };
+  const posName = (c) => POS[c.placement] + (c.ring > 0 ? ', filet (anneau ' + c.ring + ')' : '');
+  const key = (c) => (c ? c.placement + ':' + c.ring : null);
+  const BASE = { top: 'text-before-edge', middle: 'central', bottom: 'text-after-edge' };
+
+  // Helvetica advance widths approximated by character class, as in bench/run.ts.
+  function tw(text, F) {
+    let em = 0;
+    for (const ch of text) {
+      if (ch === ' ') em += 0.278;
+      else if ("-'’.,:;!|".includes(ch)) em += 0.25;
+      else if ('ilIjtf'.includes(ch)) em += 0.26;
+      else if ('mwMW'.includes(ch)) em += 0.85;
+      else if (ch !== ch.toLowerCase()) em += 0.68;
+      else em += 0.53;
+    }
+    return em * F + 2;
+  }
+
+  // Text point of a candidate box, as PlacedLabel computes it.
+  function candPoint(c) {
+    return {
+      x: c.textAnchor === 'start' ? c.x0 : c.textAnchor === 'end' ? c.x1 : (c.x0 + c.x1) / 2,
+      y: c.baseline === 'top' ? c.y0 : c.baseline === 'bottom' ? c.y1 : (c.y0 + c.y1) / 2,
+      textAnchor: c.textAnchor, baseline: c.baseline, leader: c.leader
+    };
+  }
+  function drawText(g, p, name, F, cls) {
+    const x = p.x + (p.textAnchor === 'start' ? 1 : p.textAnchor === 'end' ? -1 : 0);
+    return el('text', { x: r1(x), y: r1(p.y), 'text-anchor': p.textAnchor, 'dominant-baseline': BASE[p.baseline], class: cls || 'lbl', 'font-size': F, text: name }, g);
+  }
+  function drawLabel(g, p, name, F, cls) {
+    if (p.leader) el('polyline', { points: pts(p.leader), class: 'ldr' }, g);
+    drawText(g, p, name, F, cls);
+  }
+  function drawSymbols(g, L) {
+    const order = L.map((_, i) => i).sort((a, b) => (L[b].priority || 0) - (L[a].priority || 0));
+    for (const i of order) {
+      const s = L[i].symbol;
+      if (s && s.type === 'circle') el('circle', { cx: r1(L[i].x), cy: r1(L[i].y), r: Math.max(0.4, s.radius).toFixed(2), class: 'sym' }, g);
+    }
+  }
+  function rect(g, b, cls) {
+    return el('rect', { x: r1(b[0]), y: r1(b[1]), width: r1(b[2] - b[0]), height: r1(b[3] - b[1]), class: cls }, g);
+  }
+  const cbox = (c) => [c.x0, c.y0, c.x1, c.y1];
+  function topShare(L, res, k) {
+    const by = L.map((_, i) => i).sort((a, b) => (L[b].priority || 0) - (L[a].priority || 0)).slice(0, k);
+    return (100 * by.filter((i) => res.labels[i].visible).length) / by.length;
+  }
+
+  // ---------- Scenes ----------
+  const BZH_ROWS = BZH; // [name, births 2018, x, y] Lambert-93 in decametres
+
+  function bzhA4() {
+    const PAGE = { w: 1043, h: 714 }, F = 9, R = 20;
+    const xs = BZH_ROWS.map((r) => r[2]), ys = BZH_ROWS.map((r) => r[3]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const k = Math.min((PAGE.w - 20) / (x1 - x0), (PAGE.h - 20) / (y1 - y0));
+    const vmax = Math.max(...BZH_ROWS.map((r) => r[1]));
+    const rank = new Map(BZH_ROWS.map((r, i) => [i, r[1]]).sort((a, b) => b[1] - a[1]).map(([i], r) => [i, r]));
+    const labels = BZH_ROWS.map((r, i) => ({
+      id: i,
+      x: PAGE.w / 2 + (r[2] - (x0 + x1) / 2) * k,
+      y: PAGE.h / 2 - (r[3] - (y0 + y1) / 2) * k,
+      width: tw(r[0], F),
+      height: F * 1.2 + 1,
+      symbol: r[1] > 0 ? { type: 'circle', radius: R * Math.sqrt(r[1] / vmax) } : undefined,
+      priority: r[1],
+      leader: rank.get(i) < 300
+    }));
+    return { labels, names: BZH_ROWS.map((r) => r[0]), F, R, vmax, legend: [10, PAGE.h - 170, 190, PAGE.h - 10], bounds: [0, 0, PAGE.w, PAGE.h] };
+  }
+
+  function windowScene(N, W, H, F, R, cx, cy, span) {
+    let sub = BZH_ROWS.filter((r) => Math.abs(r[2] - cx) < span / 2 && Math.abs(r[3] - cy) < (span * H) / W / 2);
+    sub = sub.sort((a, b) => b[1] - a[1]).slice(0, N);
+    const k = W / span;
+    const vmax = Math.max(...sub.map((r) => r[1]));
+    const labels = sub.map((r, i) => ({
+      id: i, x: W / 2 + (r[2] - cx) * k, y: H / 2 - (r[3] - cy) * k, width: tw(r[0], F), height: F * 1.2 + 1,
+      symbol: { type: 'circle', radius: R * Math.sqrt(r[1] / vmax) }, priority: r[1]
+    }));
+    return { labels, names: sub.map((r) => r[0]), F };
+  }
+
+  // ---------- 1. Hero ----------
+  const A4 = bzhA4();
+  const heroOpts = { bounds: A4.bounds, obstacles: [{ type: 'rect', box: A4.legend }] };
+  let t0 = performance.now();
+  const heroG = LP.placeLabels(A4.labels, { ...heroOpts, optimize: 'none' });
+  const tG = performance.now() - t0;
+  t0 = performance.now();
+  const heroC = LP.placeLabels(A4.labels, heroOpts);
+  const tC = performance.now() - t0;
+
+  function drawLegend(g, lg, F, R, vmax) {
+    rect(g, lg, 'legend-box');
+    el('text', { x: lg[0] + 12, y: lg[1] + 22, class: 'ink', 'font-size': 11, 'font-weight': 700, text: 'Naissances en 2018' }, g);
+    const cx = lg[0] + 50, base = lg[3] - 26;
+    for (const v of [2659, 1000, 200]) {
+      const r = R * Math.sqrt(v / vmax);
+      el('circle', { cx, cy: base - r, r, class: 'sym' }, g);
+      el('line', { x1: cx, y1: base - 2 * r, x2: cx + 46, y2: base - 2 * r, class: 'stroke-rule' }, g);
+      el('text', { x: cx + 50, y: base - 2 * r, 'dominant-baseline': 'central', class: 'ink2', 'font-size': F, text: fmt.format(v) }, g);
+    }
+    el('text', { x: lg[0] + 12, y: lg[3] - 8, class: 'muted', 'font-size': 8, text: 'Source : INSEE, IGN' }, g);
+  }
+
+  const heroSvg = $('hero-svg');
+  el('rect', { x: 0, y: 0, width: 1043, height: 714, class: 'bg' }, heroSvg);
+  drawLegend(el('g', {}, heroSvg), A4.legend, A4.F, A4.R, A4.vmax);
+  drawSymbols(el('g', {}, heroSvg), A4.labels);
+  const heroLabels = el('g', {}, heroSvg);
+  function heroShow(mode) {
+    heroLabels.textContent = '';
+    for (const id of ['naive', 'greedy', 'chain']) $('hero-' + id).setAttribute('aria-pressed', String(id === mode));
+    if (mode === 'naive') {
+      A4.labels.forEach((l, i) => {
+        const r = l.symbol ? l.symbol.radius : 0;
+        el('text', { x: r1(l.x + r + 2), y: r1(l.y), 'dominant-baseline': 'central', class: 'lbl-naive', 'font-size': A4.F, text: A4.names[i] }, heroLabels);
+      });
+      $('hero-stats').textContent = '1 202 noms écrits, aucun choix';
+      return;
+    }
+    const res = mode === 'greedy' ? heroG : heroC;
+    for (const p of res.labels) if (p.visible) drawLabel(heroLabels, p, A4.names[p.index], A4.F);
+    $('hero-stats').textContent =
+      fmt.format(res.stats.placed) + ' noms placés sur 1 202 · ' + fmt.format(Math.round(topShare(A4.labels, res, 100))) + ' % du top 100 · ' + fmt1.format(mode === 'greedy' ? tG : tC) + ' ms ici';
+  }
+  for (const id of ['naive', 'greedy', 'chain']) $('hero-' + id).addEventListener('click', () => heroShow(id));
+  heroShow('chain');
+
+  // ---------- 2. Contract ----------
+  (function contract() {
+    const svg = $('contract-svg');
+    const defs = el('defs', {}, svg);
+    const m = el('marker', { id: 'arrowhead', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+    el('path', { d: 'M0,0 L10,5 L0,10 z', class: 'ink2' }, m);
+    el('line', { x1: 360, y1: 14, x2: 360, y2: 236, class: 'stroke-rule' }, svg);
+    el('text', { x: 16, y: 26, class: 'ink2 small', 'font-weight': 700, text: 'ENTRÉE' }, svg);
+    el('text', { x: 376, y: 26, class: 'ink2 small', 'font-weight': 700, text: 'SORTIE' }, svg);
+    const W = 116, H = 20, R = 23;
+    // Input
+    const ax = 110, ay = 150;
+    el('circle', { cx: ax, cy: ay, r: R, class: 'sym' }, svg);
+    el('circle', { cx: ax, cy: ay, r: 2.5, class: 'ink' }, svg);
+    el('text', { x: ax + 6, y: ay + 14, class: 'ink small', text: 'x, y' }, svg);
+    el('line', { x1: ax, y1: ay, x2: ax - R, y2: ay, class: 'arrow-line' }, svg);
+    el('text', { x: ax - 40, y: ay + 40, class: 'ink2 small', text: 'symbol.radius' }, svg);
+    rect(svg, [200, 60, 200 + W, 60 + H], 'box-ring');
+    el('text', { x: 200 + W / 2, y: 70, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'ink', 'font-size': 14, text: 'Rennes' }, svg);
+    el('text', { x: 200 + W / 2, y: 98, 'text-anchor': 'middle', class: 'ink2 small', text: 'width × height mesurés' }, svg);
+    el('text', { x: 200, y: 200, class: 'ink2 small', text: 'priority : 2 659' }, svg);
+    el('text', { x: 200, y: 216, class: 'ink2 small', text: 'mode : optional' }, svg);
+    // Output: computed by the real engine.
+    const bx = 470, by = 150;
+    const res = LP.placeLabels([{ x: bx, y: by, width: W, height: H, symbol: { type: 'circle', radius: R } }], { bounds: [360, 0, 720, 250] });
+    const p = res.labels[0];
+    el('circle', { cx: bx, cy: by, r: R, class: 'sym' }, svg);
+    el('circle', { cx: bx, cy: by, r: 2.5, class: 'ink' }, svg);
+    rect(svg, p.box, 'box-label');
+    drawText(svg, p, 'Rennes', 14, 'ink');
+    el('circle', { cx: p.x, cy: p.y, r: 3.5, class: 'acc' }, svg);
+    el('line', { x1: bx, y1: by, x2: p.x - 3, y2: p.y + 3, class: 'arrow-line' }, svg);
+    el('text', { x: bx + 30, y: by + 10, class: 'ink2 small', text: 'offset [' + Math.round(p.offset[0]) + ', ' + Math.round(p.offset[1]) + ']' }, svg);
+    el('text', { x: p.x, y: p.box[1] - 22, class: 'acc small', text: 'x, y : point du texte' }, svg);
+    el('text', { x: p.x, y: p.box[1] - 8, class: 'ink2 small', text: 'textAnchor ' + p.textAnchor + ' · baseline ' + p.baseline }, svg);
+    el('text', { x: 376, y: 216, class: 'ink2 small', text: 'placement : ' + p.placement + ' · ring ' + p.ring + ' · leader : aucun' }, svg);
+  })();
+
+  // ---------- 3. Candidates ----------
+  (function candidates() {
+    const svg = $('cand-svg');
+    const h = 14, cx = 280, cy = 200;
+    const rIn = $('cand-r'), wIn = $('cand-w'), ringsIn = $('cand-rings');
+    let cands = [], shapes = [];
+    function settings(rings) {
+      return {
+        positions: LP.DEFAULT_POSITIONS, gap: 0.2 * h, inside: true, rings: rings ? [h, 2 * h] : [],
+        leaderStyle: 'octilinear', symbolGap: 0.25 * h, minGap: 0.5 * h, leaderBaseCost: 8, leaderLengthCost: 2, areaOverflowCost: 6, unit: h
+      };
+    }
+    function render() {
+      const r = +rIn.value, w = +wIn.value;
+      $('cand-r-out').textContent = r;
+      $('cand-w-out').textContent = w;
+      const label = { x: cx, y: cy, width: w, height: h, symbol: r > 0 ? { type: 'circle', radius: r } : undefined };
+      cands = LP.buildCandidates(label, settings(ringsIn.checked));
+      clear(svg);
+      el('rect', { x: 60, y: 60, width: 440, height: 280, class: 'bg' }, svg);
+      el('line', { x1: cx, y1: 60, x2: cx, y2: 340, class: 'gridline' }, svg);
+      el('line', { x1: 60, y1: cy, x2: 500, y2: cy, class: 'gridline' }, svg);
+      if (r > 0) el('circle', { cx, cy, r, class: 'sym' }, svg);
+      el('circle', { cx, cy, r: 2, class: 'ink' }, svg);
+      shapes = new Array(cands.length);
+      const order = cands.map((c, i) => i).sort((a, b) => cands[b].ring - cands[a].ring || (cands[a].placement === 'inside') - (cands[b].placement === 'inside'));
+      for (const i of order) {
+        const c = cands[i];
+        const g = el('g', {}, svg);
+        if (c.leader) el('polyline', { points: pts(c.leader), class: 'ldr-muted' }, g);
+        const box = rect(g, cbox(c), c.ring > 0 ? 'box-ring' : 'box-cand');
+        el('text', {
+          x: r1((c.x0 + c.x1) / 2), y: r1((c.y0 + c.y1) / 2), 'text-anchor': 'middle', 'dominant-baseline': 'central',
+          class: c.ring > 0 ? 'muted tiny' : 'acc small', 'font-weight': c.ring > 0 ? 400 : 700, text: String(i + 1)
+        }, g);
+        shapes[i] = { g, box, cls: box.getAttribute('class') };
+      }
+      const tb = $('cand-table');
+      tb.textContent = '';
+      cands.forEach((c, i) => {
+        const tr = document.createElement('tr');
+        tr.tabIndex = 0;
+        tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + posName(c) + '</td><td class="num">' + fmt2.format(c.cost) + '</td>';
+        const on = () => { tr.classList.add('hl'); shapes[i].box.setAttribute('class', 'box-ok'); svg.appendChild(shapes[i].g); };
+        const off = () => { tr.classList.remove('hl'); shapes[i].box.setAttribute('class', shapes[i].cls); };
+        tr.addEventListener('mouseenter', on);
+        tr.addEventListener('mouseleave', off);
+        tr.addEventListener('focus', on);
+        tr.addEventListener('blur', off);
+        tb.appendChild(tr);
+      });
+      const fits = r > 0 && Math.hypot(w / 2, h / 2) <= r;
+      el('text', { x: 68, y: 76, class: 'ink2 tiny', text: cands.length + ' candidats' + (fits ? ' · le nom tient dans le cercle' : r > 0 ? ' · le nom ne tient pas dans le cercle' : ' · pas de symbole') }, svg);
+    }
+    for (const i of [rIn, wIn, ringsIn]) i.addEventListener('input', render);
+    render();
+  })();
+
+  // ---------- 4. Obstacles ----------
+  (function obstacles() {
+    const svg = $('obs-svg');
+    const W = 576, H = 312, cell = 12, h = 24, res = 1 / cell;
+    const nx = W / cell, ny = H / cell;
+    const circles = [[96, 96, 36], [250, 74, 22], [196, 196, 16], [404, 120, 28], [330, 232, 9], [492, 64, 12], [150, 262, 5], [292, 144, 4], [318, 168, 3], [538, 140, 5], [56, 200, 4], [446, 40, 3], [388, 282, 4], [128, 166, 6.5], [240, 276, 3.5], [356, 52, 2.5], [462, 210, 4.5], [30, 40, 3]];
+    const legend = [450, 246, 568, 304];
+    const q = { x: 254, y: 120, w: 84, h: 24 };
+    const thrIn = $('obs-thr'), countsIn = $('obs-counts');
+    let raster;
+    function build() {
+      const thr = +thrIn.value * h;
+      raster = new LP.ObstacleRaster([0, 0, W, H], res);
+      for (const [x, y, r] of circles) raster.addCircle(x, y, Math.max(r, 0.5 / res), r < thr);
+      raster.addRect(legend, false);
+      raster.finalize();
+    }
+    function render() {
+      const thr = +thrIn.value * h;
+      $('obs-thr-out').textContent = fmt2.format(+thrIn.value) + ' h = ' + fmt1.format(thr) + ' px';
+      clear(svg);
+      el('rect', { x: 0, y: 0, width: W, height: H, class: 'bg' }, svg);
+      const hard = raster.hard, soft = raster.soft;
+      for (let j = 0; j < ny; j++)
+        for (let i = 0; i < nx; i++) {
+          const a = hard[j * nx + i], s = soft[j * nx + i];
+          if (a) el('rect', { x: i * cell, y: j * cell, width: cell, height: cell, class: 'cell-hard', 'fill-opacity': Math.min(0.6, 0.22 * a) }, svg);
+          else if (s) el('rect', { x: i * cell, y: j * cell, width: cell, height: cell, class: 'cell-soft', 'fill-opacity': 0.35 }, svg);
+        }
+      for (let i = 0; i <= nx; i++) el('line', { x1: i * cell, y1: 0, x2: i * cell, y2: H, class: 'gridline' }, svg);
+      for (let j = 0; j <= ny; j++) el('line', { x1: 0, y1: j * cell, x2: W, y2: j * cell, class: 'gridline' }, svg);
+      for (const [x, y, r] of circles) el('circle', { cx: x, cy: y, r, class: r < thr ? 'sym-soft' : 'sym' }, svg);
+      el('rect', { x: legend[0], y: legend[1], width: legend[2] - legend[0], height: legend[3] - legend[1], class: 'legend-box', 'fill-opacity': 0.5 }, svg);
+      el('text', { x: (legend[0] + legend[2]) / 2, y: (legend[1] + legend[3]) / 2, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'ink small', text: 'Légende' }, svg);
+      if (countsIn.checked)
+        for (let j = 0; j < ny; j++)
+          for (let i = 0; i < nx; i++) {
+            const a = hard[j * nx + i], s = soft[j * nx + i];
+            if (a || s) el('text', { x: i * cell + cell / 2, y: j * cell + cell / 2 + 0.5, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 7.5, class: a ? 'ink' : 'ink2', text: String(a || s) }, svg);
+          }
+      // Query box and its four summed-area lookups.
+      const box = [q.x, q.y, q.x + q.w, q.y + q.h];
+      const [i0, j0, i1, j1] = raster.cellRange(box);
+      el('rect', { x: i0 * cell, y: j0 * cell, width: (i1 - i0) * cell, height: (j1 - j0) * cell, class: 'cell-in' }, svg);
+      const qb = el('rect', { x: box[0], y: box[1], width: q.w, height: q.h, class: 'q-box' }, svg);
+      qb.setAttribute('fill', 'transparent');
+      const sat = raster.hardSat, w = nx + 1;
+      const corners = [['A', i0, j0], ['B', i1, j0], ['C', i0, j1], ['D', i1, j1]];
+      const vals = {};
+      for (const [n, i, j] of corners) {
+        vals[n] = sat[j * w + i];
+        el('circle', { cx: i * cell, cy: j * cell, r: 6.5, class: 'q-corner' }, svg);
+        el('text', { x: i * cell, y: j * cell + 0.5, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 8, 'font-weight': 700, class: 'ink', text: n }, svg);
+      }
+      const hardCov = raster.hardCoverage(box);
+      const softArea = raster.softArea(box);
+      const softCost = (6 * softArea) / (h * h);
+      const legendHit = box[0] < legend[2] && legend[0] < box[2] && box[1] < legend[3] && legend[1] < box[3];
+      const out = box[0] < 0 || box[1] < 0 || box[2] > W || box[3] > H;
+      const blocked = hardCov > 0 || legendHit || out;
+      $('obs-side').innerHTML =
+        '<h4>Lecture de la table</h4>' +
+        '<table><tbody>' +
+        corners.map(([n]) => '<tr><td>' + n + '</td><td class="num mono">' + fmt.format(vals[n]) + '</td></tr>').join('') +
+        '<tr><td>D − B − C + A</td><td class="num mono"><b>' + fmt.format(hardCov) + '</b></td></tr>' +
+        '</tbody></table>' +
+        '<p style="margin:.6rem 0 .2rem">Couverture dure : <b>' + fmt.format(hardCov) + '</b> cellule' + (hardCov > 1 ? 's' : '') + (legendHit ? ' (dont la légende, testée aussi exactement)' : '') + '.</p>' +
+        '<p style="margin:.2rem 0">Couverture douce : ' + fmt1.format(softArea) + ' px², soit un coût de <b>+' + fmt2.format(softCost) + '</b>.</p>' +
+        '<p style="margin:.6rem 0 0;font-weight:600" class="' + (blocked ? 'check bad' : 'check') + '">' + (out ? 'Écarté : hors du cadre.' : blocked ? 'Écarté : touche un obstacle dur.' : 'Libre vis-à-vis des obstacles fixes.') + '</p>';
+    }
+    function move(x, y) {
+      q.x = Math.max(-q.w / 2, Math.min(W - q.w / 2, x));
+      q.y = Math.max(-q.h / 2, Math.min(H - q.h / 2, y));
+      render();
+    }
+    let drag = null;
+    svg.addEventListener('pointerdown', (e) => {
+      const p = svgPoint(svg, e);
+      if (p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h) {
+        drag = { dx: p.x - q.x, dy: p.y - q.y };
+        svg.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      }
+    });
+    svg.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const p = svgPoint(svg, e);
+      move(p.x - drag.dx, p.y - drag.dy);
+    });
+    svg.addEventListener('pointerup', () => (drag = null));
+    svg.addEventListener('keydown', (e) => {
+      const d = e.shiftKey ? cell : cell / 4;
+      const m = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] }[e.key];
+      if (!m) return;
+      e.preventDefault();
+      move(q.x + m[0], q.y + m[1]);
+    });
+    svg.style.touchAction = 'none';
+    thrIn.addEventListener('input', () => { build(); render(); });
+    countsIn.addEventListener('input', render);
+    build();
+    render();
+  })();
+
+  // ---------- Shared scene for 5 and 6 ----------
+  const RS = windowScene(35, 640, 420, 11, 16, 35180, 678900, 8000);
+  const RS_OPTS = { bounds: [0, 0, 640, 420] };
+  const nm = (i) => RS.names[i];
+  const prioTxt = (i) => fmt.format(RS.labels[i].priority) + ' naissances';
+
+  function drawBase(svg, L) {
+    clear(svg);
+    el('rect', { x: 0, y: 0, width: 640, height: 420, class: 'bg' }, svg);
+    drawSymbols(el('g', {}, svg), L);
+  }
+  function drawHiddenMark(g, l) {
+    const r = l.symbol ? l.symbol.radius : 0;
+    const x = l.x + r * 0.7 + 3, y = l.y - r * 0.7 - 3;
+    el('path', { d: 'M' + (x - 3) + ',' + (y - 3) + 'L' + (x + 3) + ',' + (y + 3) + 'M' + (x + 3) + ',' + (y - 3) + 'L' + (x - 3) + ',' + (y + 3), class: 'hidden-x' }, g);
+  }
+
+  function makePlayer(cfg) {
+    // cfg: { n, render(k), delay(k), play, prev, next, reset, slider?, out? }
+    let k = cfg.start ?? cfg.n - 1, timer = null;
+    const playBtn = $(cfg.play);
+    if (reduce) playBtn.hidden = true;
+    function show(v) {
+      k = Math.max(0, Math.min(cfg.n - 1, v));
+      cfg.render(k);
+      if (cfg.slider) { $(cfg.slider).value = k; }
+      if (cfg.out) $(cfg.out).textContent = (k + 1) + ' / ' + cfg.n;
+      $(cfg.prev).disabled = k === 0;
+      $(cfg.next).disabled = k === cfg.n - 1;
+    }
+    function stop() {
+      clearTimeout(timer);
+      timer = null;
+      playBtn.textContent = 'Lecture';
+    }
+    function tick() {
+      if (k >= cfg.n - 1) return stop();
+      show(k + 1);
+      timer = setTimeout(tick, cfg.delay(k));
+    }
+    playBtn.addEventListener('click', () => {
+      if (timer) return stop();
+      if (k >= cfg.n - 1) show(0);
+      playBtn.textContent = 'Pause';
+      timer = setTimeout(tick, cfg.delay(k));
+    });
+    $(cfg.prev).addEventListener('click', () => { stop(); show(k - 1); });
+    $(cfg.next).addEventListener('click', () => { stop(); show(k + 1); });
+    $(cfg.reset).addEventListener('click', () => { stop(); show(0); });
+    if (cfg.slider) {
+      $(cfg.slider).max = cfg.n - 1;
+      $(cfg.slider).addEventListener('input', (e) => { stop(); show(+e.target.value); });
+    }
+    show(k);
+    return { show, stop, get k() { return k; } };
+  }
+
+  // ---------- 5. Greedy ----------
+  (function greedy() {
+    const L = RS.labels;
+    const P = new LP.Placer(L, RS_OPTS);
+    const ev = [];
+    const placed = new Array(L.length).fill(null);
+    const hidden = new Set();
+    const frames = [{ placed: placed.slice(), hidden: new Set(), cur: null, tries: [], chosen: null, ev: { t: 'init' } }];
+    let tries = [];
+    const push = (e, cur, chosen) => frames.push({ placed: placed.slice(), hidden: new Set(hidden), cur, tries: tries.slice(), chosen, ev: e });
+    let rank = 0;
+    for (const i of P.order) {
+      rank++;
+      tries = [];
+      push({ t: 'start', i, rank, nf: P.feasible[i].length, nb: P.blocked[i].length }, i, null);
+      let done = false;
+      for (const c of P.feasible[i]) {
+        const bl = P.conflicts(i, c);
+        if (!bl.length) {
+          P.place(i, c);
+          placed[i] = c;
+          push({ t: 'place', i, c }, i, c);
+          done = true;
+          break;
+        }
+        tries.push({ c, bl });
+        push({ t: 'try', i, c, bl }, i, null);
+      }
+      if (!done) {
+        hidden.add(i);
+        push({ t: 'hide', i }, i, null);
+      }
+    }
+    // Same result as the public API?
+    const real = LP.placeLabels(L, { ...RS_OPTS, optimize: 'none' });
+    const same = real.labels.every((p, i) => key(p.visible ? p : null) === key(placed[i]));
+    const nPlaced = placed.filter(Boolean).length;
+    $('g-check').innerHTML = 'État final comparé à <code>placeLabels(…, { optimize: \'none\' })</code> : <span class="check' + (same ? '' : ' bad') + '">' + (same ? 'identique' : 'différent') + '</span> (' + nPlaced + ' placées, ' + (L.length - nPlaced) + ' masquées).';
+
+    const list = $('g-order');
+    const items = P.order.map((i, r) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="n">' + (r + 1) + '</span><span class="nm">' + nm(i) + '</span><span class="st"></span>';
+      list.appendChild(li);
+      return li;
+    });
+    const posInOrder = new Map(P.order.map((i, r) => [i, r]));
+    const svg = $('g-svg');
+
+    function render(k) {
+      const f = frames[k];
+      drawBase(svg, L);
+      const g = el('g', {}, svg);
+      L.forEach((l, i) => {
+        if (f.placed[i] && i !== f.cur) drawLabel(g, candPoint(f.placed[i]), nm(i), RS.F);
+        if (f.hidden.has(i) && i !== f.cur) drawHiddenMark(g, l);
+      });
+      const last = k === frames.length - 1;
+      if (last) L.forEach((l, i) => { if (f.placed[i] && i === f.cur) drawLabel(g, candPoint(f.placed[i]), nm(i), RS.F); if (f.hidden.has(i) && i === f.cur) drawHiddenMark(g, l); });
+      if (f.cur !== null && !last) {
+        const i = f.cur, l = L[i];
+        const o = el('g', {}, svg);
+        for (const c of P.blocked[i]) rect(o, cbox(c), 'box-static');
+        f.tries.forEach((t, n) => {
+          if (t.c.leader) el('polyline', { points: pts(t.c.leader), class: 'ldr-ko' }, o);
+          rect(o, cbox(t.c), 'box-ko');
+          if (n === f.tries.length - 1 && f.ev.t === 'try') for (const b of t.bl) if (f.placed[b]) rect(o, cbox(f.placed[b]), 'box-blk');
+        });
+        if (f.chosen) {
+          rect(o, cbox(f.chosen), 'box-ok');
+          drawLabel(o, candPoint(f.chosen), nm(i), RS.F);
+        }
+        if (f.ev.t === 'hide') drawHiddenMark(o, l);
+        el('circle', { cx: l.x, cy: l.y, r: (l.symbol ? l.symbol.radius : 0) + 3, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, style: 'stroke: var(--accent)' }, o);
+      }
+      const e = f.ev;
+      let cap = '';
+      if (e.t === 'init') cap = 'Carte vide : 35 étiquettes à placer, de la plus forte natalité à la plus faible.';
+      else if (e.t === 'start') cap = 'N° ' + e.rank + ' · ' + nm(e.i) + ' (' + prioTxt(e.i) + ') : ' + (e.nf + e.nb) + ' candidats, dont ' + e.nb + ' écartés d\'avance (hors du cadre ou sur un symbole dur).';
+      else if (e.t === 'try') cap = nm(e.i) + ' essaie ' + posName(e.c) + ' (coût ' + fmt2.format(e.c.cost) + ') : gêné par ' + e.bl.map(nm).join(', ') + '.';
+      else if (e.t === 'place') cap = nm(e.i) + ' : retenu ' + posName(e.c) + ' (coût ' + fmt2.format(e.c.cost) + ').';
+      else if (e.t === 'hide') cap = nm(e.i) + ' : aucun candidat libre, l\'étiquette est masquée.';
+      if (k === frames.length - 1) cap = 'Fin du passage glouton : ' + nPlaced + ' étiquettes placées, ' + (L.length - nPlaced) + ' masquées (' + [...hidden].map(nm).join(', ') + ').';
+      $('g-caption').textContent = cap;
+      $('g-pos-out').textContent = k + ' / ' + (frames.length - 1);
+      // Status list
+      items.forEach((li, r) => {
+        const i = P.order[r];
+        li.className = (i === f.cur && k !== frames.length - 1 ? 'cur ' : '') + (f.placed[i] ? 'placed' : f.hidden.has(i) ? 'hidden' : '');
+        li.querySelector('.st').textContent = f.placed[i] ? 'placée' : f.hidden.has(i) ? 'masquée' : '';
+      });
+      if (f.cur !== null) {
+        const li = items[posInOrder.get(f.cur)];
+        const top = li.offsetTop - list.offsetTop;
+        if (top < list.scrollTop || top > list.scrollTop + list.clientHeight - 24) list.scrollTop = top - list.clientHeight / 2;
+      }
+    }
+    const player = makePlayer({
+      n: frames.length, render, play: 'g-play', prev: 'g-prev', next: 'g-next', reset: 'g-reset', slider: 'g-pos',
+      delay: (k) => ({ start: 420, try: 200, place: 340, hide: 650 })[frames[Math.min(k + 1, frames.length - 1)].ev.t] || 300
+    });
+    $('g-label').addEventListener('click', () => {
+      player.stop();
+      let k = player.k + 1;
+      while (k < frames.length - 1 && !['place', 'hide'].includes(frames[k].ev.t)) k++;
+      player.show(k);
+    });
+  })();
+
+  // ---------- 6. Ejection chains ----------
+  (function chains() {
+    const L = RS.labels;
+    const P = new LP.Placer(L, RS_OPTS);
+    P.greedy();
+    const mode = (i) => L[i].mode || 'optional';
+    const prio = (i) => L[i].priority || 0;
+    const frames = [];
+    const snap = () => P.current.slice();
+    const hiddenNames = (s) => L.map((_, i) => i).filter((i) => !s[i]).map(nm);
+    const s0 = snap();
+    frames.push({ state: s0, cap: 'Après le passage glouton : ' + s0.filter(Boolean).length + ' étiquettes placées, ' + hiddenNames(s0).length + ' masquées (' + hiddenNames(s0).join(', ') + ').' });
+    // Mirror of Placer.chain(), logged step by step.
+    const maxWork = P.work + 40 * L.length;
+    const stop = () => P.work >= maxWork;
+    let improved = true;
+    outer: while (improved && !stop()) {
+      improved = false;
+      for (const i of P.order) {
+        if (stop()) break outer;
+        if (P.current[i] || mode(i) !== 'optional') continue;
+        for (const c of P.feasible[i]) {
+          if (stop()) break outer;
+          const before = snap();
+          const blockers = P.conflicts(i, c, 3);
+          if (blockers.length > 2) {
+            frames.push({ state: before, tryI: i, tryC: c, blockers, cap: nm(i) + ' essaie ' + posName(c) + ' : au moins trois étiquettes le gênent, ce candidat est ignoré.' });
+            continue;
+          }
+          if (blockers.some((b) => mode(b) === 'pinned' || P.forced.has(b))) continue;
+          frames.push({ state: before, tryI: i, tryC: c, blockers, cap: nm(i) + ' (' + prioTxt(i) + ') est masqué. Il essaie ' + posName(c) + ', gêné par ' + blockers.map((b) => nm(b) + ' (' + fmt.format(prio(b)) + ')').join(' et ') + '.' });
+          P.journal = new Map();
+          for (const b of blockers) P.unplace(b);
+          P.place(i, c);
+          let ok = true, failed = null;
+          const lost = [];
+          for (const b of blockers) {
+            if (P.relocate(b, 1, stop)) continue;
+            if (mode(b) === 'required' || prio(b) >= prio(i)) { ok = false; failed = b; break; }
+            lost.push(b);
+          }
+          const journal = P.journal;
+          P.journal = null;
+          const attempt = snap();
+          const moves = [...journal].filter(([t]) => t !== i).map(([t, b]) => ({ t, before: b, after: P.current[t] }));
+          const moveTxt = moves.map((m) => (m.after ? nm(m.t) + ' se déplace ' + posName(m.after) : nm(m.t) + ' ne trouve pas d\'autre place')).join(' ; ');
+          frames.push({ state: attempt, moves, focus: i, cap: 'On soulève ' + blockers.map(nm).join(' et ') + '. ' + moveTxt + '.' });
+          if (ok) {
+            frames.push({ state: attempt, okI: i, cap: 'Chaîne acceptée : ' + nm(i) + ' entre ' + posName(c) + (lost.length ? ', ' + lost.map(nm).join(', ') + ' (priorité plus basse) sort.' : ', personne n\'est perdu.') });
+            improved = true;
+            break;
+          }
+          for (const [t, tc] of journal) { P.unplace(t); if (tc) P.place(t, tc); }
+          frames.push({ state: snap(), cap: 'Chaîne refusée : ' + nm(failed) + ' ne peut ni bouger ni céder sa place, car sa priorité n\'est pas plus basse. Tout revient en place.' });
+        }
+      }
+    }
+    const chainState = snap();
+    P.polish();
+    const final = snap();
+    const polished = L.map((_, i) => i).filter((i) => key(chainState[i]) !== key(final[i]));
+    frames.push({
+      state: final, moves: polished.map((t) => ({ t, before: chainState[t], after: final[t] })),
+      cap: polished.length ? 'Polissage : ' + polished.map((t) => nm(t) + ' revient ' + posName(final[t])).join(' ; ') + ', une position mieux classée et désormais libre.' : 'Polissage : aucune étiquette ne trouve de position mieux classée.'
+    });
+    const real = LP.placeLabels(L, RS_OPTS);
+    const same = real.labels.every((p, i) => key(p.visible ? p : null) === key(final[i]));
+    const nFinal = final.filter(Boolean).length;
+    frames.push({ state: final, cap: 'Résultat : ' + nFinal + ' étiquettes placées sur ' + L.length + ', contre ' + s0.filter(Boolean).length + ' après le glouton.' });
+    $('c-check').innerHTML = 'État final comparé à <code>placeLabels(…)</code> avec les réglages par défaut : <span class="check' + (same ? '' : ' bad') + '">' + (same ? 'identique' : 'différent') + '</span>.';
+
+    const svg = $('c-svg');
+    function render(k) {
+      const f = frames[k];
+      drawBase(svg, L);
+      const g = el('g', {}, svg);
+      L.forEach((l, i) => {
+        const c = f.state[i];
+        if (c) drawLabel(g, candPoint(c), nm(i), RS.F);
+        else drawHiddenMark(g, l);
+      });
+      const o = el('g', {}, svg);
+      if (f.tryC) {
+        if (f.tryC.leader) el('polyline', { points: pts(f.tryC.leader), class: 'ldr-acc' }, o);
+        rect(o, cbox(f.tryC), 'box-try');
+        drawLabel(o, candPoint(f.tryC), nm(f.tryI), RS.F, 'lbl');
+        for (const b of f.blockers) if (f.state[b]) rect(o, cbox(f.state[b]), 'box-blk');
+      }
+      for (const m of f.moves || []) {
+        if (m.before) rect(o, cbox(m.before), 'box-ghost');
+        if (m.after) rect(o, cbox(m.after), 'box-ok');
+        else drawHiddenMark(o, L[m.t]);
+        if (m.before && m.after) {
+          const a = [(m.before.x0 + m.before.x1) / 2, (m.before.y0 + m.before.y1) / 2];
+          const b = [(m.after.x0 + m.after.x1) / 2, (m.after.y0 + m.after.y1) / 2];
+          if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 4) el('line', { x1: r1(a[0]), y1: r1(a[1]), x2: r1(b[0]), y2: r1(b[1]), class: 'arrow-line' }, o);
+        }
+      }
+      if (f.focus !== undefined && f.state[f.focus]) rect(o, cbox(f.state[f.focus]), 'box-try');
+      if (f.okI !== undefined) rect(o, cbox(f.state[f.okI]), 'box-ok');
+      $('c-caption').textContent = f.cap;
+    }
+    makePlayer({ n: frames.length, start: 0, render, play: 'c-play', prev: 'c-prev', next: 'c-next', reset: 'c-reset', out: 'c-pos-out', delay: () => 2200 });
+  })();
+
+  // ---------- 7. Leaders and flush alignment ----------
+  (function leaders() {
+    const svg = $('ld-svg');
+    const W = 560, H = 380, ax = 220, ay = 200, h = 20, bw = 104;
+    const name = 'Saint-Brieuc';
+    const st = { cx: 360, cy: 110, style: 'octilinear' };
+    const rIn = $('ld-r');
+    function render() {
+      const r = +rIn.value;
+      $('ld-r-out').textContent = r;
+      const box = [st.cx - bw / 2, st.cy - h / 2, st.cx + bw / 2, st.cy + h / 2];
+      const symbol = r > 0 ? { type: 'circle', radius: r } : undefined;
+      const symbolGap = 0.25 * h, minGap = 0.5 * h;
+      const lead = LP.leaderGeometry({ anchor: [ax, ay], symbol, box, style: st.style, symbolGap, minGap });
+      const anchor = LP.flushAlignment([ax, ay], box);
+      clear(svg);
+      el('rect', { x: 0, y: 0, width: W, height: H, class: 'bg' }, svg);
+      for (const [dx, dy] of [[1, 1], [1, -1], [1, 0], [0, 1]]) el('line', { x1: ax - dx * 600, y1: ay - dy * 600, x2: ax + dx * 600, y2: ay + dy * 600, class: 'gridline' }, svg);
+      if (r > 0) el('circle', { cx: ax, cy: ay, r, class: 'sym' }, svg);
+      el('circle', { cx: ax, cy: ay, r: r + symbolGap, class: 'ring-sg' }, svg);
+      el('circle', { cx: ax, cy: ay, r: r + minGap, class: 'ring-mg' }, svg);
+      el('circle', { cx: ax, cy: ay, r: 2, class: 'ink' }, svg);
+      el('text', { x: ax, y: ay + r + minGap + 14, 'text-anchor': 'middle', class: 'muted tiny', text: 'minGap' }, svg);
+      if (lead) {
+        el('polyline', { points: pts(lead), class: 'ldr-acc' }, svg);
+        for (const p of lead) el('circle', { cx: r1(p[0]), cy: r1(p[1]), r: 2.4, class: 'acc' }, svg);
+      }
+      const g = el('g', { class: 'drag' }, svg);
+      rect(g, box, 'box-label');
+      const tx = anchor === 'start' ? box[0] + 4 : anchor === 'end' ? box[2] - 4 : st.cx;
+      el('line', { x1: tx, y1: box[1] - 4, x2: tx, y2: box[3] + 4, stroke: 'var(--accent)', style: 'stroke: var(--accent)', 'stroke-width': 1.2 }, g);
+      el('text', { x: tx, y: st.cy, 'text-anchor': anchor, 'dominant-baseline': 'central', class: 'ink', 'font-size': 13, text: name }, g);
+      // Description
+      const nearest = [Math.max(box[0], Math.min(ax, box[2])), Math.max(box[1], Math.min(ay, box[3]))];
+      const gap = Math.hypot(nearest[0] - ax, nearest[1] - ay) - r;
+      const kind = (a, b) => {
+        const dx = b[0] - a[0], dy = b[1] - a[1];
+        if (Math.abs(dy) < 1e-6) return 'horizontal';
+        if (Math.abs(dx) < 1e-6) return 'vertical';
+        if (Math.abs(Math.abs(dx) - Math.abs(dy)) < 1e-6) return '45°';
+        return 'oblique';
+      };
+      const segs = lead ? lead.slice(1).map((p, i) => kind(lead[i], p)) : [];
+      const fr = { start: 'ferré à gauche (start)', end: 'ferré à droite (end)', middle: 'centré (middle)' };
+      $('ld-side').innerHTML =
+        '<h4>Résultat</h4>' +
+        '<p style="margin:.2rem 0"><code>flushAlignment</code> : <b>' + fr[anchor] + '</b></p>' +
+        '<p style="margin:.2rem 0">Écart symbole–boîte : <b class="mono">' + fmt1.format(Math.max(0, gap)) + '</b> (minGap = ' + minGap + ')</p>' +
+        '<p style="margin:.2rem 0"><code>leaderGeometry</code> : ' + (lead ? '<b>' + segs.length + ' segment' + (segs.length > 1 ? 's' : '') + '</b> : ' + segs.join(', puis ') : '<b>aucun filet</b>' + (gap < minGap ? ', l\'étiquette se lit encore comme attachée' : '')) + '</p>' +
+        '<p style="margin:.6rem 0 0;color:var(--ink-2)">Cercle pointillé bleu : départ du filet (symbolGap = ' + symbolGap + '). Cercle orange : en deçà, pas de filet.</p>';
+    }
+    let drag = null;
+    svg.addEventListener('pointerdown', (e) => {
+      const p = svgPoint(svg, e);
+      if (Math.abs(p.x - st.cx) <= bw / 2 + 4 && Math.abs(p.y - st.cy) <= h / 2 + 4) {
+        drag = { dx: p.x - st.cx, dy: p.y - st.cy };
+        svg.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      }
+    });
+    function move(x, y) {
+      st.cx = Math.max(bw / 2, Math.min(W - bw / 2, x));
+      st.cy = Math.max(h / 2, Math.min(H - h / 2, y));
+      render();
+    }
+    svg.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const p = svgPoint(svg, e);
+      move(p.x - drag.dx, p.y - drag.dy);
+    });
+    svg.addEventListener('pointerup', () => (drag = null));
+    svg.addEventListener('keydown', (e) => {
+      const d = e.shiftKey ? 20 : 4;
+      const m = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] }[e.key];
+      if (!m) return;
+      e.preventDefault();
+      move(st.cx + m[0], st.cy + m[1]);
+    });
+    svg.style.touchAction = 'none';
+    rIn.addEventListener('input', render);
+    for (const [id, s] of [['ld-octo', 'octilinear'], ['ld-straight', 'straight']])
+      $(id).addEventListener('click', () => {
+        st.style = s;
+        $('ld-octo').setAttribute('aria-pressed', String(s === 'octilinear'));
+        $('ld-straight').setAttribute('aria-pressed', String(s === 'straight'));
+        render();
+      });
+    render();
+  })();
+
+  // ---------- 8. Stability ----------
+  (function stability() {
+    const W = 640, H = 420, F = 10, R = 14, cx = 35180, cy = 678900, base = 16000, N = 150;
+    let sub = BZH_ROWS.filter((r) => Math.abs(r[2] - cx) < base / 2 && Math.abs(r[3] - cy) < (base * H) / W / 2);
+    sub = sub.sort((a, b) => b[1] - a[1]).slice(0, N);
+    const vmax = Math.max(...sub.map((r) => r[1]));
+    const levels = [0, 1, 2, 3, 4, 5].map((z) => {
+      const k = W / (base / Math.pow(1.25, z));
+      return sub.map((r, i) => ({
+        id: i, x: W / 2 + (r[2] - cx) * k, y: H / 2 - (r[3] - cy) * k, width: tw(r[0], F), height: F * 1.2 + 1,
+        symbol: { type: 'circle', radius: R * Math.sqrt(r[1] / vmax) }, priority: r[1]
+      }));
+    });
+    const runs = {};
+    for (const prev of [true, false])
+      for (const chain of [true, false]) {
+        const seq = [];
+        let last;
+        for (const L of levels) {
+          last = LP.placeLabels(L, { bounds: [0, 0, W, H], optimize: chain ? 'chain' : 'none', previous: prev ? last : undefined });
+          seq.push(last);
+        }
+        runs[prev + '|' + chain] = seq;
+      }
+    function movedBetween(a, b) {
+      const out = [];
+      let both = 0;
+      for (let i = 0; i < a.labels.length; i++) {
+        if (!a.labels[i].visible || !b.labels[i].visible) continue;
+        both++;
+        if (key(a.labels[i]) !== key(b.labels[i])) out.push(i);
+      }
+      return { ids: out, share: both ? (100 * out.length) / both : 0, both };
+    }
+    const mean = (seq) => {
+      let s = 0;
+      for (let z = 1; z < seq.length; z++) s += movedBetween(seq[z - 1], seq[z]).share;
+      return s / (seq.length - 1);
+    };
+    const avg = {};
+    for (const k in runs) avg[k] = mean(runs[k]);
+    const svg = $('st-svg');
+    const zIn = $('st-z'), pIn = $('st-prev'), cIn = $('st-chain');
+    function render() {
+      const z = +zIn.value, prev = pIn.checked, chain = cIn.checked;
+      $('st-z-out').textContent = '× ' + fmt2.format(Math.pow(1.25, z));
+      const seq = runs[prev + '|' + chain], res = seq[z], L = levels[z];
+      clear(svg);
+      el('rect', { x: 0, y: 0, width: W, height: H, class: 'bg' }, svg);
+      drawSymbols(el('g', {}, svg), L);
+      const g = el('g', {}, svg);
+      for (const p of res.labels) if (p.visible) drawLabel(g, p, sub[p.index][0], F);
+      let mv = null;
+      if (z > 0) {
+        mv = movedBetween(seq[z - 1], res);
+        for (const i of mv.ids) rect(g, res.labels[i].box, 'moved');
+      }
+      const cell = (p, c) => '<td class="num' + (p === prev && c === chain ? '" style="font-weight:700;color:var(--accent)' : '') + '">' + pct(avg[p + '|' + c]) + '</td>';
+      $('st-side').innerHTML =
+        '<h4>Ce zoom</h4>' +
+        (mv ? '<p style="margin:.2rem 0 .8rem"><span class="big">' + pct(mv.share) + '</span><br>des ' + mv.both + ' étiquettes visibles aux deux niveaux ont changé de position.</p>' : '<p style="margin:.2rem 0 .8rem">Premier niveau : avancez le curseur pour zoomer.</p>') +
+        '<h4>Moyenne sur les 5 zooms</h4>' +
+        '<table><thead><tr><th></th><th class="num">glouton</th><th class="num">chaînes</th></tr></thead><tbody>' +
+        '<tr><td>sans previous</td>' + cell(false, false) + cell(false, true) + '</tr>' +
+        '<tr><td>avec previous</td>' + cell(true, false) + cell(true, true) + '</tr>' +
+        '</tbody></table>' +
+        '<p style="margin:.6rem 0 0;color:var(--ink-2)">Les chaînes d\'éjection peuvent encore déplacer une étiquette collante pour en faire entrer une autre.</p>';
+    }
+    for (const i of [zIn, pIn, cIn]) i.addEventListener('input', render);
+    render();
+
+    // Work budget on the Bretagne page.
+    const budgets = [0, 5, 10, 20, 40, 80, 160];
+    const bIn = $('bu-w');
+    const sig = (r) => r.labels.map((l) => (l.visible ? key(l) : '-')).join('|');
+    let pending = 0;
+    function runBudget() {
+      const per = budgets[+bIn.value];
+      $('bu-w-out').textContent = per === 0 ? '0 (glouton seul)' : String(per) + (per === 40 ? ' (défaut)' : '');
+      const opts = per === 0 ? { ...heroOpts, optimize: 'none' } : { ...heroOpts, budget: { work: per * A4.labels.length } };
+      const t = performance.now();
+      const a = LP.placeLabels(A4.labels, opts);
+      const ms = performance.now() - t;
+      const b = LP.placeLabels(A4.labels, opts), c = LP.placeLabels(A4.labels, opts);
+      const same = sig(a) === sig(b) && sig(b) === sig(c);
+      $('bu-side').innerHTML =
+        '<div class="stat-row"><span>Placées : <b>' + fmt.format(a.stats.placed) + '</b> / 1 202</span><span>Top 100 : <b>' + fmt.format(Math.round(topShare(A4.labels, a, 100))) + ' %</b></span><span>Top 1000 : <b>' + pct(topShare(A4.labels, a, 1000)) + '</b></span><span>Tests de candidats : <b>' + fmt.format(a.stats.work) + '</b></span><span>Temps ici : <b>' + fmt1.format(ms) + ' ms</b></span></div>' +
+        '<p style="margin:.3rem 0 0">Trois exécutions de suite : <span class="check' + (same ? '' : ' bad') + '">' + (same ? 'résultats identiques' : 'résultats différents') + '</span>.</p>';
+    }
+    bIn.addEventListener('input', () => {
+      cancelAnimationFrame(pending);
+      pending = requestAnimationFrame(runBudget);
+    });
+    runBudget();
+  })();
+
+  // ---------- 9. Obstacle policy ----------
+  (function policy() {
+    const variants = [
+      ['Seuil dur/doux (défaut)', 'Symboles de rayon ≥ 0,25 h durs, les autres coûtent 6 par h².', {}],
+      ['Tous les symboles durs', 'symbolObstacles: { hardMinRadius: 0 }', { symbolObstacles: { hardMinRadius: 0 } }]
+    ];
+    const top = A4.labels.map((_, i) => i).sort((a, b) => A4.labels[b].priority - A4.labels[a].priority).slice(0, 100);
+    const host = $('pol-out');
+    for (const [title, sub, extra] of variants) {
+      const res = LP.placeLabels(A4.labels, { ...heroOpts, optimize: 'none', ...extra });
+      const share = topShare(A4.labels, res, 100);
+      const div = document.createElement('div');
+      div.className = 'panel kpi';
+      div.innerHTML = '<strong>' + title + '</strong><p class="mono" style="font-size:.78rem">' + sub + '</p><div class="big" style="margin-top:.5rem">' + fmt.format(Math.round(share)) + ' %</div><p>du top 100 nommé · ' + fmt.format(res.stats.placed) + ' noms au total</p>';
+      const svg = el('svg', { viewBox: '0 0 1043 714', role: 'img', 'aria-label': title + ' : communes du top 100 nommées (vert) ou non (rouge)' });
+      svg.style.marginTop = '.6rem';
+      el('rect', { x: 0, y: 0, width: 1043, height: 714, class: 'bg' }, svg);
+      const gs = el('g', { opacity: 0.45 }, svg);
+      drawSymbols(gs, A4.labels);
+      for (const i of top) {
+        const l = A4.labels[i];
+        const ok = res.labels[i].visible;
+        el('circle', { cx: r1(l.x), cy: r1(l.y), r: Math.max(5, l.symbol.radius + 2), fill: 'none', style: 'stroke: var(' + (ok ? '--ok' : '--ko') + ')', 'stroke-width': ok ? 2 : 3.5 }, svg);
+      }
+      div.appendChild(svg);
+      const leg = document.createElement('div');
+      leg.className = 'legend-inline';
+      leg.innerHTML = '<span style="--c:var(--ok)">top 100 nommé</span><span style="--c:var(--ko)">top 100 sans nom</span>';
+      div.appendChild(leg);
+      host.appendChild(div);
+    }
+  })();
+})();
+
+</script>
+</body>
+</html>

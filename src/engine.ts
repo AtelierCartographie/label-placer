@@ -219,7 +219,8 @@ export class Placer {
       let chosen: Candidate | null = null;
       const key = previous?.[i];
       if (key) {
-        const sticky = list.find((c) => candidateKey(c) === key);
+        // A leader is kept only while it is needed: a sticky placement stays next to its symbol.
+        const sticky = list.find((c) => c.ring === 0 && candidateKey(c) === key);
         if (sticky && this.isFree(i, sticky)) {
           chosen = sticky;
           this.sticky.add(i);
