@@ -15,4 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pinned`, `required` and `optional` modes, and sticky placements through `previous`
 - `leaderGeometry()`: octilinear or straight leaders with a symbol buffer and a minimum gap
 - `flushAlignment()`: text flushed towards its feature
+- Default positions after the Atelier's practice: right, above, left, below, then the corners
+- Ambiguity cost: a label avoids spots as close to another symbol as to its own (`ambiguity`)
+- Labels with no size stand for symbols without a label: obstacles and features for the others
+- `required` labels try one farther leader ring, then overlap where they cover the least of the hard obstacles
 - Benchmark on French communes

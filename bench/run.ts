@@ -33,7 +33,8 @@ interface Scenario {
   labels: LabelInput[];
 }
 
-function scenario(name: string, keep: (r: Row) => boolean, leaderTop = Infinity): Scenario {
+/** Only the `labelled` largest communes have a label; the others are symbols alone. */
+function scenario(name: string, keep: (r: Row) => boolean, leaderTop = Infinity, labelled = Infinity): Scenario {
   const subset = rows.filter(keep);
   const xs = subset.map((r) => r[3]);
   const ys = subset.map((r) => r[4]);
@@ -45,13 +46,45 @@ function scenario(name: string, keep: (r: Row) => boolean, leaderTop = Infinity)
     id: i,
     x: PAGE.width / 2 + (r[3] - (x0 + x1) / 2) * k,
     y: PAGE.height / 2 - (r[4] - (y0 + y1) / 2) * k,
-    width: textWidth(r[0]),
-    height: FONT * 1.2 + 1,
+    width: rank.get(i)! < labelled ? textWidth(r[0]) : 0,
+    height: rank.get(i)! < labelled ? FONT * 1.2 + 1 : 0,
     symbol: r[2] > 0 ? { type: 'circle', radius: MAX_RADIUS * Math.sqrt(r[2] / vmax) } : undefined,
     priority: r[2],
     leader: rank.get(i)! < leaderTop
   }));
   return { name, rows: subset, labels };
+}
+
+/** Distance from a box to a label's symbol, or to its anchor without one. */
+function symbolDistance(l: LabelInput, [x0, y0, x1, y1]: Box): number {
+  const d = Math.hypot(Math.max(0, x0 - l.x, l.x - x1), Math.max(0, y0 - l.y, l.y - y1));
+  return l.symbol?.type === 'circle' ? Math.max(0, d - l.symbol.radius) : d;
+}
+
+/** Labels next to their symbol with another symbol, not under the label, at least as close. */
+function ambiguous(s: Scenario, r: PlacementResult): number {
+  const size = 40;
+  const cells = new Map<string, number[]>();
+  s.labels.forEach((l, i) => {
+    const key = `${Math.floor(l.x / size)},${Math.floor(l.y / size)}`;
+    cells.set(key, [...(cells.get(key) ?? []), i]);
+  });
+  let count = 0;
+  for (const p of r.labels) {
+    if (!p.visible || p.leader || p.placement === 'inside') continue;
+    const own = symbolDistance(s.labels[p.index], p.box!);
+    const [cx, cy] = [Math.floor(((p.box![0] + p.box![2]) / 2) / size), Math.floor(((p.box![1] + p.box![3]) / 2) / size)];
+    let found = false;
+    for (let dx = -2; dx <= 2 && !found; dx++)
+      for (let dy = -2; dy <= 2 && !found; dy++)
+        for (const k of cells.get(`${cx + dx},${cy + dy}`) ?? []) {
+          const o = s.labels[k];
+          const covered = o.x > p.box![0] && o.x < p.box![2] && o.y > p.box![1] && o.y < p.box![3];
+          if (k !== p.index && !covered && symbolDistance(o, p.box!) <= own) found = true;
+        }
+    if (found) count++;
+  }
+  return count;
 }
 
 function quality(s: Scenario, r: PlacementResult) {
@@ -62,6 +95,7 @@ function quality(s: Scenario, r: PlacementResult) {
     top100: top(100),
     top1000: top(1000),
     leaders: r.labels.filter((l) => l.leader).length,
+    ambiguous: ambiguous(s, r),
     inside: r.labels.filter((l) => l.placement === 'inside').length
   };
 }
@@ -96,6 +130,7 @@ if (writeSvg) mkdirSync(new URL('./out/', import.meta.url), { recursive: true })
 
 const scenarios = [
   scenario('Bretagne (1,202)', (r) => r[1] === '53', 300),
+  scenario('Bretagne, 100 labels (1,202)', (r) => r[1] === '53', 300, 100),
   scenario('Grand Est + BFC + IdF (10,066)', (r) => ['44', '27', '11'].includes(r[1]), 1000),
   scenario('France (34,734)', () => true, 1000)
 ];

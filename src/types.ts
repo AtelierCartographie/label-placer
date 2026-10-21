@@ -30,6 +30,7 @@ export type LabelSymbol =
  */
 export type LabelMode = 'optional' | 'required' | 'pinned';
 
+/** A label with no width or height is a symbol alone: never shown, an obstacle and a feature for the others. */
 export interface LabelInput {
   id?: string | number;
   /** Anchor, in the caller's units. */
@@ -102,6 +103,12 @@ export interface PlaceOptions {
   symbolObstacles?: { hardMinRadius?: number; softCost?: number };
   /** `false` disables leader candidates. */
   leader?: LeaderOptions | false;
+  /**
+   * A label next to its symbol is ambiguous when another symbol (or bare anchor) is as close:
+   * it costs up to `cost`, decreasing to nothing for a symbol `margin` farther than its own.
+   * Labels with a leader are not concerned.
+   */
+  ambiguity?: { cost?: number; margin?: number };
   /** Cost, in position-rank units, of a centered area label that overflows its inscribed circle twice. */
   areaOverflowCost?: number;
   /** Raster cells per unit for static obstacles. Defaults to about ten cells per label height. */

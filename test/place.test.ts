@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { placeLabels } from '../src/index.ts';
+import { DEFAULT_POSITIONS, placeLabels } from '../src/index.ts';
 import type { Box, LabelInput, PlacedLabel, PlaceOptions } from '../src/index.ts';
 
 function mulberry32(seed: number) {
@@ -120,11 +120,11 @@ describe('placeLabels', () => {
     const one: LabelInput[] = [{ id: 'a', x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 4 } }];
     const opts: PlaceOptions = { bounds: [0, 0, 200, 200], inside: false };
     const first = placeLabels(one, opts);
-    expect(first.labels[0].placement).toBe('top-right');
-    const forced = placeLabels(one, { ...opts, positions: ['bottom-left', 'top-right'] });
+    expect(first.labels[0].placement).toBe('right');
+    const forced = placeLabels(one, { ...opts, positions: ['bottom-left', 'right'] });
     expect(forced.labels[0].placement).toBe('bottom-left');
-    const sticky = placeLabels(one, { ...opts, positions: ['bottom-left', 'top-right'], previous: first });
-    expect(sticky.labels[0].placement).toBe('top-right');
+    const sticky = placeLabels(one, { ...opts, positions: ['bottom-left', 'right'], previous: first });
+    expect(sticky.labels[0].placement).toBe('right');
   });
 
   it('drops a sticky leader once the label fits next to its symbol again', () => {
@@ -213,6 +213,53 @@ describe('placeLabels', () => {
     expect(required.ring).toBe(3);
     expect(required.overlapping).toBe(false);
     expect(placeLabels([label], options).labels[0].visible).toBe(false);
+  });
+
+  it('prefers the sides, right, above, left, below, then the corners', () => {
+    expect(DEFAULT_POSITIONS).toEqual(['right', 'top', 'left', 'bottom', 'top-right', 'top-left', 'bottom-right', 'bottom-left']);
+    const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 } };
+    const r = placeLabels([label], { bounds: [0, 0, 200, 200], inside: false });
+    expect(r.labels[0].placement).toBe('right');
+    const blocked = placeLabels([label], { bounds: [0, 0, 200, 200], inside: false, obstacles: [{ type: 'rect', box: [104, 96, 150, 110] }] });
+    expect(blocked.labels[0].placement).toBe('top');
+  });
+
+  it('moves a label away from a symbol as close to it as its own', () => {
+    const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 } };
+    // A symbol without a label, as close to the box on the right as the label's own symbol.
+    const other: LabelInput = { x: 150, y: 100, width: 0, height: 0, symbol: { type: 'circle', radius: 3 } };
+    const options: PlaceOptions = { bounds: [0, 0, 200, 200], inside: false };
+    expect(placeLabels([label, other], options).labels[0].placement).toBe('top');
+    expect(placeLabels([label, other], { ...options, ambiguity: { cost: 0 } }).labels[0].placement).toBe('right');
+    expect(placeLabels([label], options).labels[0].placement).toBe('right');
+  });
+
+  it('treats a label with no size as a symbol alone', () => {
+    const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 } };
+    const dots: LabelInput[] = [20, 30, 40].map((x) => ({ x, y: 180, width: 0, height: 0, symbol: { type: 'circle', radius: 1 } }));
+    const r = placeLabels([label, ...dots], { bounds: [0, 0, 200, 200], inside: false });
+    // The gap still defaults to a fifth of the label height.
+    expect(r.labels[0].box).toEqual([105, 95, 145, 105]);
+    expect(r.labels.slice(1).every((l) => !l.visible)).toBe(true);
+  });
+
+  it('keeps leaders off small symbols when it can', () => {
+    const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 } };
+    // Too small to block: a soft symbol on the way of the leader to the right.
+    const dot: LabelInput = { x: 110, y: 100, width: 0, height: 0, symbol: { type: 'circle', radius: 2 } };
+    const r = placeLabels([label, dot], {
+      bounds: [0, 0, 200, 200],
+      inside: false,
+      positions: ['right', 'left'],
+      leader: { rings: [10] },
+      // Block the spots next to the symbol, not the leaders.
+      obstacles: [
+        { type: 'rect', box: [105, 95, 114, 98] },
+        { type: 'rect', box: [86, 95, 95, 98] }
+      ]
+    });
+    expect(r.labels[0].placement).toBe('left');
+    expect(r.labels[0].ring).toBe(1);
   });
 
   it('places more labels with ejection chains than greedily, without losing higher ones', () => {

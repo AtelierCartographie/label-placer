@@ -2,7 +2,8 @@
 
 Automatic label placement for **maps** and **charts**, independent of the renderer. Give it anchors, label sizes, symbols, priorities and obstacles. It returns where each label goes, how to align its text, and the leader line that joins it to its feature when it had to move away. Draw the result with SVG, Canvas, WebGL or a map library.
 
-- Ordered candidate positions around point symbols (Imhof's preferences by default), inside a symbol when the label fits, centered on areas.
+- Ordered candidate positions around point symbols (by default the sides first, right, above, left, below, then the corners), inside a symbol when the label fits, centered on areas.
+- No ambiguity: a label avoids spots as close to another symbol as to its own.
 - Priorities and a hierarchy of modes: `pinned` (placed by hand), `required` (never hidden), `optional`.
 - Obstacles: other symbols, legend, title, any rectangle or circle, with hard and soft costs.
 - Leader lines with cartographic rules: octilinear routes, a clear buffer around the symbol, and no leader while the label still reads as attached.
@@ -71,14 +72,18 @@ Each movable label tries, in order of cost:
 
 1. `inside` its symbol, when the box fits in it (`inside: false` to disable);
 2. `center` for an `area` symbol, cheaper when the label fits in the inscribed circle;
-3. the `positions` around the symbol, in order of preference (default: `top-right`, `top-left`, `bottom-right`, `bottom-left`, `right`, `left`, `top`, `bottom`);
+3. the `positions` around the symbol, in order of preference (default: `right`, `top`, `left`, `bottom`, `top-right`, `top-left`, `bottom-right`, `bottom-left`: the practice of the Atelier de cartographie, sides before corners);
 4. the same positions on farther rings, with a leader line (`leader.rings`, default one and two label heights).
 
 A candidate blocked by a hard obstacle or outside the bounds is discarded. A soft obstacle adds a cost per area covered.
 
 ### Symbols as obstacles
 
-Every label's symbol is an obstacle for the other labels. Symbols at least `symbolObstacles.hardMinRadius` large (default a quarter of a label height) block. Smaller ones only add `symbolObstacles.softCost` per label-height² covered. Making every tiny dot a hard obstacle leaves the largest features of a dense map without a label. A symbol smaller than a raster cell still counts in the cell it sits in.
+Every label's symbol is an obstacle for the other labels. A symbol drawn without a label (filtered out, or too small to name) is passed as a label with no `width` or `height`: it is never shown, but it is an obstacle and a feature like the others. Symbols at least `symbolObstacles.hardMinRadius` large (default a quarter of a label height) block. Smaller ones only add `symbolObstacles.softCost` per label-height² covered. Making every tiny dot a hard obstacle leaves the largest features of a dense map without a label. A symbol smaller than a raster cell still counts in the cell it sits in.
+
+### Ambiguity
+
+A label next to its symbol is ambiguous when another symbol, or a bare anchor, is as close to it as its own: the reader may attach it to the wrong feature. Such a spot costs `ambiguity.cost` (default 6, in position-rank units), decreasing to nothing for a symbol `ambiguity.margin` (default h/2) farther than the label's own. Symbols under the label are left to the soft cost, and labels with a leader are not concerned: the leader names their feature. The cost is computed once a label has a chance to be shown, so that hidden labels of a dense map cost nothing. Set `ambiguity: { cost: 0 }` to turn it off.
 
 ### Leader lines
 
@@ -89,7 +94,7 @@ Every label's symbol is an obstacle for the other labels. Symbols at least `symb
 - `octilinear` (default): a 45° leg out of the symbol, then a horizontal leg into the middle of the facing side, or a vertical leg into the top or bottom edge. Every segment is horizontal, vertical or diagonal.
 - `straight`: a single segment to the same port.
 
-A leader never crosses another label, another leader, or a hard obstacle, except for a `required` label left with no other way. Restrict leaders to the labels that deserve them with `leader: false` on the others.
+A leader never crosses another label, another leader, or a hard obstacle, except for a `required` label left with no other way. Across a small (soft) symbol it pays the soft cost of a strip one label height wide. Restrict leaders to the labels that deserve them with `leader: false` on the others.
 
 ### Budget and determinism
 
@@ -148,7 +153,7 @@ new TextLayer({
 
 ### `placeLabels(labels, options): PlacementResult`
 
-`LabelInput`: `id?`, `x`, `y`, `width`, `height`, `symbol?` (`{ type: 'circle', radius }`, `{ type: 'rect', width, height }` or `{ type: 'area', inscribedRadius }`), `priority?`, `mode?`, `offset?` (pinned), `leader?` (default true).
+`LabelInput`: `id?`, `x`, `y`, `width`, `height` (both 0 for a symbol without a label), `symbol?` (`{ type: 'circle', radius }`, `{ type: 'rect', width, height }` or `{ type: 'area', inscribedRadius }`), `priority?`, `mode?`, `offset?` (pinned), `leader?` (default true).
 
 `PlaceOptions`:
 
@@ -156,10 +161,11 @@ new TextLayer({
 | ------------------ | ------------------------------------------------ | ------------------------------------------------------------------ |
 | `bounds`           | required                                         | `[x0, y0, x1, y1]` labels must stay in                             |
 | `obstacles`        | `[]`                                             | `{ type: 'rect', box, soft? }`, `{ type: 'circle', x, y, radius, soft? }` |
-| `positions`        | Imhof order                                      | candidate positions, by preference                                 |
+| `positions`        | sides, then corners                              | candidate positions, by preference                                 |
 | `gap`              | `0.2h`                                           | space between a symbol and an adjacent label                       |
 | `inside`           | `true`                                           | try the label inside its symbol                                    |
 | `symbolObstacles`  | `{ hardMinRadius: 0.25h, softCost: 6 }`          | how label symbols block other labels                               |
+| `ambiguity`        | `{ cost: 6, margin: 0.5h }`                      | cost of a spot as close to another symbol as to the label's own    |
 | `leader`           | `{ rings: [h, 2h], style: 'octilinear', symbolGap: 0.25h, minGap: 0.5h, baseCost: 8, lengthCost: 2 }` | leader candidates; `false` disables them |
 | `areaOverflowCost` | `6`                                              | cost of a centered area label twice too large for its area         |
 | `resolution`       | about 10 cells per h                             | raster cells per unit for static obstacles                         |
@@ -183,20 +189,24 @@ Costs are in position-rank units: the n-th preferred position costs n.
 4. **Ejection chains**: a hidden label takes a candidate if the one or two labels in its way can move to free spots, directly or by pushing one more label. A label that cannot move is hidden only if it ranks lower.
 5. **Polish**: each label moves to its best-ranked free candidate.
 
-Inspirations, none of whose code is reused: Imhof's position preferences; Christensen, Marks & Shieber (1995) on point-feature label placement; the FALP and ejection-chain search of QGIS's PAL; MapLibre's sticky anchors and grid index; vega-label's occupancy bitmap; d3-annotation's connectors; Philippe Rivière's *Automated label placement (France)* notebook.
+Inspirations, none of whose code is reused: Imhof's position preferences, reordered after the Atelier's practice; Christensen, Marks & Shieber (1995) on point-feature label placement; the FALP and ejection-chain search of QGIS's PAL; MapLibre's sticky anchors and grid index; vega-label's occupancy bitmap; d3-annotation's connectors; Philippe Rivière's *Automated label placement (France)* notebook.
 
 ## Benchmark
 
 `node bench/run.ts [--svg]` places the names of French communes next to proportional symbols of births (INSEE 2018) on an A4 landscape page, with a legend as obstacle. Apple M4 Max, Node 22, one thread:
 
-| Scenario                             | Variant        | Total  | Placed | Top 100 placed | Top 1000 placed |
-| ------------------------------------ | -------------- | ------ | ------ | -------------- | --------------- |
-| Bretagne, 1,202 communes             | greedy         | 12 ms  | 377    | 82 %           | 35.8 %          |
-|                                      | ejection chains| 18 ms  | 402    | 84 %           | 38.3 %          |
-| Grand Est + BFC + IdF, 10,066        | greedy         | 39 ms  | 397    | 28 %           | 26.2 %          |
-|                                      | ejection chains| 87 ms  | 412    | 28 %           | 28.0 %          |
-| France, 34,734                       | greedy         | 89 ms  | 407    | 56 %           | 26.2 %          |
-|                                      | ejection chains| 320 ms | 447    | 56 %           | 28.6 %          |
+| Scenario                             | Variant        | Total  | Placed | Top 100 placed | Top 1000 placed | Ambiguous |
+| ------------------------------------ | -------------- | ------ | ------ | -------------- | --------------- | --------- |
+| Bretagne, 1,202 communes             | greedy         | 15 ms  | 381    | 85 %           | 36.0 %          | 189       |
+|                                      | ejection chains| 20 ms  | 402    | 86 %           | 38.1 %          | 188       |
+| Bretagne, 100 largest labelled       | greedy         | 6 ms   | 85     | 85 %           |                 | 42        |
+|                                      | ejection chains| 6 ms   | 88     | 88 %           |                 | 43        |
+| Grand Est + BFC + IdF, 10,066        | greedy         | 69 ms  | 397    | 29 %           | 25.0 %          | 309       |
+|                                      | ejection chains| 106 ms | 416    | 29 %           | 27.3 %          | 307       |
+| France, 34,734                       | greedy         | 111 ms | 409    | 56 %           | 26.1 %          | 339       |
+|                                      | ejection chains| 432 ms | 445    | 56 %           | 28.2 %          | 336       |
+
+*Ambiguous*: labels next to their symbol with another symbol, not under the label, at least as close. Every commune has a symbol, so in these dense scenes a label rarely finds a spot clear of the smallest ones; without the ambiguity cost, Bretagne counts 218 and its 100 largest 50.
 
 The top 100 of the larger scenarios is capped by the Paris area, where the largest communes are too close together for 9 px labels on an A4 page.
 
@@ -204,7 +214,6 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.
-- An ambiguity cost: a label closer to another anchor than to its own.
 - A demo page rendering the same placement with SVG, Canvas and deck.gl.
 
 Out of scope: labels along lines and curved labels.

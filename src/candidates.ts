@@ -50,7 +50,8 @@ const DIRECTIONS: Record<Position, [dx: -1 | 0 | 1, dy: -1 | 0 | 1]> = {
   bottom: [0, 1]
 };
 
-export const DEFAULT_POSITIONS: Position[] = ['top-right', 'top-left', 'bottom-right', 'bottom-left', 'right', 'left', 'top', 'bottom'];
+/** The practice of the Atelier de cartographie: sides first, right, above, left, below, then corners. */
+export const DEFAULT_POSITIONS: Position[] = ['right', 'top', 'left', 'bottom', 'top-right', 'top-left', 'bottom-right', 'bottom-left'];
 
 const INSIDE_COST = -1;
 

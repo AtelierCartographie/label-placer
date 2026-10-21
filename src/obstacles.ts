@@ -80,9 +80,10 @@ export class ObstacleRaster {
     return Math.max(0, i1 - i0) * Math.max(0, j1 - j0);
   }
 
-  /** Length of the segment over hard coverage, sampled once per cell. */
-  hardLength(ax: number, ay: number, bx: number, by: number): number {
+  /** Length of the segment over hard (or soft) coverage, sampled once per cell. */
+  coveredLength(ax: number, ay: number, bx: number, by: number, soft = false): number {
     const { width: W, height: H, res } = this;
+    const target = soft ? this.soft : this.hard;
     const length = Math.hypot(bx - ax, by - ay);
     const steps = Math.ceil(length * res);
     let hits = 0;
@@ -90,7 +91,7 @@ export class ObstacleRaster {
       const t = s / steps;
       const i = Math.floor((ax + (bx - ax) * t - this.bx0) * res);
       const j = Math.floor((ay + (by - ay) * t - this.by0) * res);
-      if (i >= 0 && j >= 0 && i < W && j < H && this.hard[j * W + i] > 0) hits++;
+      if (i >= 0 && j >= 0 && i < W && j < H && target[j * W + i] > 0) hits++;
     }
     return (hits * length) / steps;
   }

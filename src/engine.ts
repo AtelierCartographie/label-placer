@@ -1,5 +1,6 @@
 import { buildCandidates, DEFAULT_POSITIONS, makeCandidate, type Candidate, type CandidateSettings } from './candidates.ts';
 import { boxesOverlap, segmentHitsBox, segmentsCross } from './geometry.ts';
+import { Features } from './features.ts';
 import { Grid } from './grid.ts';
 import { flushAlignment, leaderGeometry } from './leader.ts';
 import { ObstacleRaster } from './obstacles.ts';
@@ -64,6 +65,11 @@ export class Placer {
   private stampValue = 0;
   private journal: Map<number, Candidate | null> | null = null;
   private readonly bounds: Box;
+  /** Ambiguity is costed lazily, once a label has a chance to be shown. */
+  private readonly features: Features | null;
+  private readonly ambiguityCost: number;
+  private readonly ambiguityMargin: number;
+  private readonly resolved: Uint8Array;
   work = 0;
 
   constructor(labels: LabelInput[], options: PlaceOptions) {
@@ -72,7 +78,7 @@ export class Placer {
     const n = labels.length;
     this.current = new Array(n).fill(null);
     this.stamp = new Int32Array(n);
-    const unit = median(labels.map((l) => l.height));
+    const unit = median(labels.filter((l) => l.width > 0 && l.height > 0).map((l) => l.height));
     const [bx0, by0, bx1, by1] = options.bounds;
     this.grid = new Grid(bx0, by0, bx1, by1, unit * 2);
 
@@ -115,6 +121,11 @@ export class Placer {
     }
     raster.finalize();
 
+    this.ambiguityCost = options.ambiguity?.cost ?? 6;
+    this.ambiguityMargin = options.ambiguity?.margin ?? 0.5 * unit;
+    this.features = this.ambiguityCost > 0 ? new Features(labels, options.bounds, unit * 2) : null;
+    this.resolved = new Uint8Array(n);
+
     for (let i = 0; i < n; i++) {
       const l = labels[i];
       if (!(l.width > 0 && l.height > 0)) {
@@ -147,15 +158,21 @@ export class Placer {
         const own = c.placement === 'inside' && ownHard ? raster.cellCount(box) : 0;
         const coverage = raster.hardCoverage(box) - own;
         let crossed = 0;
-        for (let k = 1; k < (c.leader?.length ?? 0); k++) crossed += raster.hardLength(...c.leader![k - 1], ...c.leader![k]);
+        let softCrossed = 0;
+        for (let k = 1; k < (c.leader?.length ?? 0); k++) {
+          crossed += raster.coveredLength(...c.leader![k - 1], ...c.leader![k]);
+          softCrossed += raster.coveredLength(...c.leader![k - 1], ...c.leader![k], true);
+        }
         const hit = hardRects.some((r) => boxesOverlap(c.x0, c.y0, c.x1, c.y1, r[0], r[1], r[2], r[3])) || coverage > 0 || crossed > 0;
-        if (softCost > 0) c.cost += (softCost * raster.softArea(box)) / (unit * unit);
+        // A leader over a symbol counts as a strip one label height wide.
+        if (softCost > 0) c.cost += (softCost * (raster.softArea(box) + softCrossed * unit)) / (unit * unit);
         if (outside || hit) {
           c.hard = coverage / (resolution * resolution) + crossed * unit + areaOutside(box, options.bounds);
           ko.push(c);
         } else (c.ring > settings.rings.length ? far : ok).push(c);
       }
       ok.sort((a, b) => a.cost - b.cost);
+      far.sort((a, b) => a.cost - b.cost);
       this.feasible.push(ok);
       this.farther.push(far);
       this.blocked.push(ko);
@@ -173,6 +190,19 @@ export class Placer {
 
   private ownHardCoverage(l: LabelInput, hardMin: number): boolean {
     return l.symbol?.type === 'circle' ? l.symbol.radius >= hardMin : l.symbol?.type === 'rect' ? Math.max(l.symbol.width, l.symbol.height) / 2 >= hardMin : false;
+  }
+
+  /** Add the ambiguity cost to the candidates next to the symbol, once, and sort them again. */
+  private resolve(i: number): Candidate[] {
+    const list = this.feasible[i];
+    if (!this.features || this.resolved[i]) return list;
+    this.resolved[i] = 1;
+    if (this.labels[i].symbol?.type === 'area' || this.mode(i) === 'pinned') return list;
+    for (const c of list)
+      if (c.ring === 0 && c.placement !== 'inside')
+        c.cost += this.ambiguityCost * this.features.ambiguity(i, [c.x0, c.y0, c.x1, c.y1], this.ambiguityMargin);
+    list.sort((a, b) => a.cost - b.cost);
+    return list;
   }
 
   private priority(i: number): number {
@@ -248,8 +278,9 @@ export class Placer {
           this.sticky.add(i);
         }
       }
-      if (!chosen) chosen = list.find((c) => this.isFree(i, c)) ?? null;
+      if (!chosen && list.some((c) => this.isFree(i, c))) chosen = this.resolve(i).find((c) => this.isFree(i, c)) ?? null;
       if (!chosen && this.mode(i) === 'required') {
+        this.resolve(i);
         chosen = this.farther[i].find((c) => this.isFree(i, c)) ?? null;
         if (!chosen) {
           chosen = this.leastBad(i, [...list, ...this.farther[i]]) ?? this.leastBad(i, this.blocked[i]);
@@ -288,7 +319,7 @@ export class Placer {
       for (const i of this.order) {
         if (stop()) return;
         if (this.current[i] || this.mode(i) !== 'optional') continue;
-        for (const c of this.feasible[i]) {
+        for (const c of this.resolve(i)) {
           if (stop()) return;
           const blockers = this.conflicts(i, c, CHAIN_MAX_EJECT + 1);
           if (blockers.length > CHAIN_MAX_EJECT) continue;
@@ -321,7 +352,7 @@ export class Placer {
 
   private relocate(j: number, depth: number, stop: () => boolean): boolean {
     const previous = this.current[j];
-    for (const c of this.feasible[j]) {
+    for (const c of this.resolve(j)) {
       if (c !== previous && this.isFree(j, c)) {
         this.place(j, c);
         return true;
@@ -353,7 +384,7 @@ export class Placer {
       if (this.sticky.has(i) && candidateKey(cur) === this.previous?.[i]) continue;
       // A required label on the farther ring takes any free candidate closer in.
       const bound = this.farther[i].includes(cur) ? Infinity : cur.cost;
-      for (const c of this.feasible[i]) {
+      for (const c of this.resolve(i)) {
         if (c.cost >= bound) break;
         if (this.isFree(i, c)) {
           this.place(i, c);
