@@ -95,7 +95,7 @@ Breaking and measuring text needs the fonts, so it stays with the caller. The ca
 
 ### Columns
 
-`align: 'columns'` brings order to dense clusters: after the optimizer, the labels of each cluster (three named anchors or more, within 4 label heights of one another, split again when more than ten) are stacked in a column beside it, flushed against a common edge, in the order of their anchors so that their leaders do not cross. The whole cluster goes on the right if it can, else on the left, else split at its median between both sides, else only the labels that already needed a leader. The column steps away from the cluster, one label height at a time, until its boxes are clear; leaders may cross the cluster's symbols. A label that does not fit keeps its place, and hidden labels of the cluster join when they fit. A column is set only when it shows more names, or tidies two labels or more that already needed a leader: labels that fit next to their symbol stay there. Labels inside their symbol, pinned, sticky or forced labels stay where they are. `placement` is `column`.
+`align: 'columns'` brings order to dense clusters: after the optimizer, the labels of each cluster (three named anchors or more, within 4 label heights of one another, split again when more than ten) are stacked in a column beside it, flushed against a common edge, in the order of their anchors so that their leaders do not cross. The whole cluster goes on the right if it can, else on the left, else split at its median between both sides, else only the labels that already needed a leader. The column steps away from the cluster, by 1, 2, 3 up to 20 label heights, until its boxes are clear, out to sea if need be; leaders may cross the cluster's symbols, not labels: a label in the column's way joins it, when it may move and its anchor lies between the cluster and the column. Neighbours whose leaders would cross are swapped, and a label whose leader would be longer than 12 label heights keeps its place. A label that does not fit keeps its place, and hidden labels of the cluster join when they fit; a column holds twenty labels at most. Columns spend a deterministic budget of 1,000 candidate tests per label shown, the most important clusters first. A column is set only when it shows more names, or tidies two labels or more that already needed a leader: labels that fit next to their symbol stay there. Labels inside their symbol, pinned, sticky or forced labels stay where they are. `placement` is `column`.
 
 ### Callouts
 
@@ -248,7 +248,7 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 ## Roadmap
 
 - Callouts along the top and bottom edges, and an exact boundary labeling (minimal total leader length without crossings).
-- Columns that take along the labels in their leaders' way and route leaders between them, for Europe on a world map.
+- Columns on a world map: Central and Eastern Europe still lack room (Russia, Ukraine and Turkey fill the east); leaders routed around labels rather than taking them along.
 - Columns above or below a cluster, labels stacked with vertical leaders from their start.
 - Group labels: one block listing a group too dense to name one by one ("Caraïbes, du Nord au Sud : …").
 - Filled polygon obstacles: masks for interrupted projections, land as a soft obstacle so that labels prefer the sea.

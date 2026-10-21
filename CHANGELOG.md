@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `line` obstacles (coastlines, borders): they keep label boxes off, not leaders
 - `align: 'columns'`: labels of dense clusters stacked in columns beside them, in the order of their anchors
 - `callout`: labels set in columns along the left or right edge, with orthogonal leaders
+- Columns take along the labels in their way, untangle crossing leaders, reach the sea if need be, within a deterministic budget
 - `orthogonal` leader style: a vertical leg out of the symbol, then a horizontal one into the label
 - Demo zones: Bretagne, Normandie and the world (`?zone=`)
 - Benchmark on French communes

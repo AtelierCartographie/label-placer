@@ -17,7 +17,14 @@ const ALIGN_REACH = 4;
 const ALIGN_MIN = 3;
 const ALIGN_MAX = 10;
 /** Steps of one label height away from the cluster tried for its column. */
-const COLUMN_TRIES = 10;
+/** Distances tried for a column beyond the cluster, in label heights. */
+const COLUMN_STEPS = [0, 1, 2, 3, 4, 6, 8, 11, 15, 20];
+/** Work the columns may spend, per label shown: deterministic, like the optimizer's budget. */
+const ALIGN_WORK = 1000;
+/** Longest leader into a column, in label heights. */
+const COLUMN_LEADER = 12;
+/** Labels a column may hold, with those it takes along. */
+const COLUMN_MAX = 20;
 
 function median(values: number[]): number {
   if (values.length === 0) return 1;
@@ -65,6 +72,8 @@ export class Placer {
   /** Candidates blocked by static obstacles, kept as a last resort for required labels. */
   private readonly blocked: Candidate[][] = [];
   private readonly order: number[];
+  /** Position of each label in `order`. */
+  private readonly rank: Int32Array;
   private readonly forced = new Set<number>();
   /** Labels that kept their previous placement; polishing leaves them there. */
   private readonly sticky = new Set<number>();
@@ -87,6 +96,7 @@ export class Placer {
   private readonly hardRects: Box[] = [];
   private readonly hardMin: number;
   private readonly softCost: number;
+  private alignStop = Infinity;
   work = 0;
 
   constructor(labels: LabelInput[], options: PlaceOptions) {
@@ -195,15 +205,17 @@ export class Placer {
 
     this.placeCallouts();
 
-    const rank = (i: number) => (labels[i].callout ? 0 : MODE_RANK[labels[i].mode ?? 'optional']);
+    const modeRank = (i: number) => (labels[i].callout ? 0 : MODE_RANK[labels[i].mode ?? 'optional']);
     this.order = labels
       .map((_, i) => i)
       .sort(
         (a, b) =>
-          rank(a) - rank(b) ||
+          modeRank(a) - modeRank(b) ||
           (labels[b].priority ?? 0) - (labels[a].priority ?? 0) ||
           a - b
       );
+    this.rank = new Int32Array(n);
+    this.order.forEach((i, r) => (this.rank[i] = r));
   }
 
   /**
@@ -262,23 +274,30 @@ export class Placer {
       if (!group.length) continue;
       const width = Math.max(...group.map((i) => this.labels[i].width));
       const column = side < 0 ? bx0 + width : bx1 - width;
-      let order = group.slice().sort((a, b) => this.labels[a].y - this.labels[b].y || a - b);
-      let cands = this.stack(order, side, column, s.gap, [by0, by1], 'margin', (i, box) => this.calloutLeader(i, box, side));
-      // Swap neighbours whose leaders cross, as long as that helps.
-      for (let pass = 0; pass < order.length; pass++) {
-        let swapped = false;
-        for (let k = 1; k < order.length; k++) {
-          if (!candidatesConflict(cands[k - 1], cands[k])) continue;
-          const next = order.slice();
-          [next[k - 1], next[k]] = [next[k], next[k - 1]];
-          const tried = this.stack(next, side, column, s.gap, [by0, by1], 'margin', (i, box) => this.calloutLeader(i, box, side));
-          if (candidatesConflict(tried[k - 1], tried[k])) continue;
-          [order, cands, swapped] = [next, tried, true];
-        }
-        if (!swapped) break;
-      }
+      const [order, cands] = this.untangle(
+        group.slice().sort((a, b) => this.labels[a].y - this.labels[b].y || a - b),
+        (o) => this.stack(o, side, column, s.gap, [by0, by1], 'margin', (i, box) => this.calloutLeader(i, box, side))
+      );
       order.forEach((i, k) => (this.feasible[i] = [cands[k]]));
     }
+  }
+
+  /** Swap neighbours of a stack whose leaders cross, as long as that helps. */
+  private untangle(order: number[], build: (order: number[]) => Candidate[]): [number[], Candidate[]] {
+    let cands = build(order);
+    for (let pass = 0; pass < order.length; pass++) {
+      let swapped = false;
+      for (let k = 1; k < order.length; k++) {
+        if (!candidatesConflict(cands[k - 1], cands[k])) continue;
+        const next = order.slice();
+        [next[k - 1], next[k]] = [next[k], next[k - 1]];
+        const tried = build(next);
+        if (candidatesConflict(tried[k - 1], tried[k])) continue;
+        [order, cands, swapped] = [next, tried, true];
+      }
+      if (!swapped) break;
+    }
+    return [order, cands];
   }
 
   /**
@@ -298,6 +317,7 @@ export class Placer {
   ): Candidate[] {
     const size = (k: number) => sizes?.[k] ?? [this.labels[order[k]].width, this.labels[order[k]].height];
     const n = order.length;
+    this.work += n;
     // Offsets that keep the boxes apart, then pool adjacent violators on the shifted targets.
     const offset = new Array<number>(n).fill(0);
     for (let k = 1; k < n; k++) offset[k] = offset[k - 1] + (size(k - 1)[1] + size(k)[1]) / 2 + gap;
@@ -563,7 +583,12 @@ export class Placer {
     const s = this.settings;
     if (!s.rings.length) return;
     const near = (a: number, b: number) => Math.hypot(this.labels[a].x - this.labels[b].x, this.labels[a].y - this.labels[b].y) <= ALIGN_REACH * this.unit;
-    const named = this.order.filter((i) => this.labels[i].width > 0 && this.labels[i].height > 0);
+    // The labels shown, and as many hidden ones again, the highest-ranked: a column could show
+    // them, while the long tail of a dense map would only cost time.
+    const shown = this.order.filter((i) => this.current[i]).length;
+    this.alignStop = this.work + ALIGN_WORK * shown;
+    let hidden = 0;
+    const named = this.order.filter((i) => this.labels[i].width > 0 && this.labels[i].height > 0 && (!!this.current[i] || hidden++ < shown));
     // A cluster too large for one column is split again with a shorter reach, and when its
     // anchors are all that close, cut in two at the median of its longer side.
     const halve = (group: number[]): number[][] => {
@@ -572,8 +597,7 @@ export class Placer {
       const axis = spread('x') >= spread('y') ? 'x' : 'y';
       const sorted = group.slice().sort((a, b) => this.labels[a][axis] - this.labels[b][axis]);
       const mid = sorted.length >> 1;
-      const order = new Map(this.order.map((i, r) => [i, r]));
-      const byRank = (g: number[]) => g.sort((a, b) => order.get(a)! - order.get(b)!);
+      const byRank = (g: number[]) => g.sort((a, b) => this.rank[a] - this.rank[b]);
       return [...halve(byRank(sorted.slice(0, mid))), ...halve(byRank(sorted.slice(mid)))];
     };
     const split = (group: number[], reach: number): number[][] =>
@@ -589,7 +613,8 @@ export class Placer {
         const c = this.current[i];
         return this.labels[i].leader !== false && (c ? this.isMovable(i) && c.placement !== 'inside' && c.placement !== 'center' : this.mode(i) === 'optional');
       });
-      if (members.length < 2) continue;
+      // Nothing to show nor tidy: no column could be worth it.
+      if (members.length < 2 || !members.some((i) => !this.current[i] || this.current[i]!.ring > 0)) continue;
       if (this.column(members, 1) || this.column(members, -1)) continue;
       const xs = members.map((i) => this.labels[i].x).sort((a, b) => a - b);
       const mid = xs[xs.length >> 1];
@@ -626,52 +651,75 @@ export class Placer {
     const s = this.settings;
     const edges = group.map((i) => this.labels[i].x + side * symbolExtent(this.labels[i].symbol, side, 0, [this.labels[i].x, this.labels[i].y]));
     const start = (side > 0 ? Math.max(...edges) : Math.min(...edges)) + side * (s.gap + s.rings[0]);
-    // Worth it only to show hidden labels, or to tidy labels that already needed a leader;
-    // each step farther must keep more labels, a quarter of a label per label height.
+    // Worth it only to show hidden labels, or to tidy labels that already needed a leader. The
+    // names it shows count first, then the labels it holds; each label height farther costs
+    // an eighth of a name.
     const worth = (kept: number[]) => kept.some((i) => !this.current[i]) || kept.filter((i) => this.current[i]!.ring > 0).length > 1;
     let best: { at: number; kept: number[]; score: number } | null = null;
-    for (let attempt = 0; attempt < COLUMN_TRIES; attempt++) {
+    for (const attempt of COLUMN_STEPS) {
+      if (this.work > this.alignStop) break;
       const at = start + side * attempt * this.unit;
       const kept = this.fitColumn(group, side, at, false);
-      const score = (kept?.length ?? 0) - attempt / 4;
+      const score = (kept?.filter((i) => !this.current[i]).length ?? 0) + (kept?.length ?? 0) / 4 - attempt / 8;
       if (kept && worth(kept) && (!best || score > best.score)) best = { at, kept, score };
+      // Farther cannot do better than the whole group.
+      if (kept && group.every((i) => kept.includes(i))) break;
     }
     return best !== null && this.fitColumn(best.kept, side, best.at, true) !== null;
   }
 
   /**
-   * The labels of the group that fit in a column at `at`: the lowest-ranked label in the way
-   * leaves it until the others fit. Placed for good with `commit`, else put back as they were.
+   * The labels that fit in a column at `at`, from the group: a label of the group whose box is
+   * blocked, or whose leader crosses another one of the group, leaves it, the lowest-ranked
+   * first; a label in the way of the column outside the group joins it if it may move and its
+   * anchor is on the column's side of the group, else the label of the group it hinders leaves. Placed for good with `commit`, else put back.
    */
   private fitColumn(group: number[], side: 1 | -1, at: number, commit: boolean): number[] | null {
     const s = this.settings;
     const [, by0, , by1] = this.bounds;
-    const rank = new Map(this.order.map((i, r) => [i, r]));
-    const lowest = (misfits: number[]) => misfits.reduce((a, b) => (rank.get(a)! > rank.get(b)! ? a : b));
+    const lowest = (misfits: number[]) => misfits.reduce((a, b) => (this.rank[a] > this.rank[b] ? a : b));
+    const left = new Set<number>();
     let members = group.slice();
-    while (members.length > 1) {
-      const order = members.slice().sort((a, b) => this.labels[a].y - this.labels[b].y || a - b);
+    // A label in the way joins only from between the group and the column: from the far side
+    // its leader would cross the whole cluster, from beyond the column it would come from outside.
+    const reachable = (o: number) =>
+      side * (this.labels[o].x - (side > 0 ? Math.min(...members.map((m) => this.labels[m].x)) : Math.max(...members.map((m) => this.labels[m].x)))) >= 0 &&
+      side * (at - this.labels[o].x) > 0;
+    const drop = (i: number) => {
+      left.add(i);
+      members = members.filter((m) => m !== i);
+    };
+    while (members.length > 1 && members.length <= COLUMN_MAX) {
       // A label keeps its layout; a hidden one joins in its main one.
-      const sizes = order.map((i): [number, number] => {
+      const size = (i: number): [number, number] => {
         const c = this.current[i];
         return c ? [c.x1 - c.x0, c.y1 - c.y0] : [this.labels[i].width, this.labels[i].height];
-      });
-      const cands = this.stack(order, side, at, s.gap, [by0, by1], 'column', (i, box) =>
-        leaderGeometry({ anchor: [this.labels[i].x, this.labels[i].y], symbol: this.labels[i].symbol, box, style: s.leaderStyle, symbolGap: s.symbolGap, minGap: s.minGap }),
-      sizes);
+      };
+      const [order, cands] = this.untangle(
+        members.slice().sort((a, b) => this.labels[a].y - this.labels[b].y || a - b),
+        (o) =>
+          this.stack(o, side, at, s.gap, [by0, by1], 'column', (i, box) =>
+            leaderGeometry({ anchor: [this.labels[i].x, this.labels[i].y], symbol: this.labels[i].symbol, box, style: s.leaderStyle, symbolGap: s.symbolGap, minGap: s.minGap }),
+          o.map(size))
+      );
       cands.forEach((c, k) => (c.layout = this.current[order[k]]?.layout ?? 0));
-      // Leaders out of a dense cluster cross its symbols: only the boxes must be clear.
-      const blocked = order.filter((i, k) => this.classify(i, cands[k], true));
+      // Leaders out of a dense cluster cross its symbols: only the boxes must be clear, and the
+      // leaders short enough to read.
+      const length = (c: Candidate) => (c.leader ?? []).reduce((sum, p, k, l) => (k ? sum + Math.hypot(p[0] - l[k - 1][0], p[1] - l[k - 1][1]) : 0), 0);
+      const blocked = order.filter((i, k) => this.classify(i, cands[k], true) || length(cands[k]) > COLUMN_LEADER * this.unit);
       if (blocked.length) {
-        members = members.filter((i) => i !== lowest(blocked));
+        drop(lowest(blocked));
         continue;
       }
       this.journal = new Map();
       for (const i of order) this.unplace(i);
       const clashing: number[] = [];
+      const inTheWay = new Set<number>();
       order.forEach((i, k) => {
-        if (this.conflicts(i, cands[k], 1).length) clashing.push(i);
-        else this.place(i, cands[k]);
+        const others = this.conflicts(i, cands[k]);
+        if (!others.length) return this.place(i, cands[k]);
+        clashing.push(i);
+        for (const o of others) if (!members.includes(o) && !left.has(o) && this.joins(o) && reachable(o)) inTheWay.add(o);
       });
       const journal = this.journal;
       this.journal = null;
@@ -681,9 +729,16 @@ export class Placer {
         if (tc) this.place(t, tc);
       }
       if (!clashing.length) return members;
-      members = members.filter((i) => i !== lowest(clashing));
+      if (inTheWay.size) members = [...members, ...inTheWay];
+      else drop(lowest(clashing));
     }
     return null;
+  }
+
+  /** Whether a placed label may be taken into a column: one that could move there itself. */
+  private joins(i: number): boolean {
+    const c = this.current[i];
+    return !!c && this.isMovable(i) && this.labels[i].leader !== false && !['inside', 'center', 'column', 'margin'].includes(c.placement);
   }
 
   /** Move each placed label to its best-ranked free candidate. */

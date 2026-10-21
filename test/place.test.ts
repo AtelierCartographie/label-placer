@@ -324,7 +324,7 @@ describe('placeLabels', () => {
     expect(r.overlapping).toBe(false);
   });
 
-  it('stacks the labels of a dense cluster in a column, in the order of their anchors', () => {
+  it('stacks the labels of a dense cluster in a column, with leaders that do not cross', () => {
     const rnd = mulberry32(7);
     // Too dense for every name to fit next to its symbol.
     const cluster: LabelInput[] = Array.from({ length: 14 }, (_, i) => ({
@@ -342,10 +342,13 @@ describe('placeLabels', () => {
     expect(column.length).toBeGreaterThanOrEqual(3);
     for (const side of ['start', 'end'] as const) {
       const same = column.filter((l) => l.textAnchor === side).sort((a, b) => a.box![1] - b.box![1]);
-      // One flush edge, and the anchors in the same order as the labels.
+      // One flush edge, and leaders that never cross.
       expect(new Set(same.map((l) => (side === 'start' ? l.box![0] : l.box![2]).toFixed(6))).size).toBeLessThanOrEqual(1);
-      const ys = same.map((l) => cluster[l.index].y);
-      expect(ys).toEqual(ys.slice().sort((a, b) => a - b));
+      for (let a = 0; a < same.length; a++)
+        for (let b = a + 1; b < same.length; b++) {
+          const [p, q] = [same[a].leader ?? [], same[b].leader ?? []];
+          for (let i = 1; i < p.length; i++) for (let j = 1; j < q.length; j++) expect(segmentsCross(...p[i - 1], ...p[i], ...q[j - 1], ...q[j])).toBe(false);
+        }
     }
     const shown = visible(r.labels);
     for (let a = 0; a < shown.length; a++) for (let b = a + 1; b < shown.length; b++) expect(overlaps(shown[a].box!, shown[b].box!)).toBe(false);
