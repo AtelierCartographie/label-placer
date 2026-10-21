@@ -564,11 +564,24 @@ export class Placer {
     if (!s.rings.length) return;
     const near = (a: number, b: number) => Math.hypot(this.labels[a].x - this.labels[b].x, this.labels[a].y - this.labels[b].y) <= ALIGN_REACH * this.unit;
     const named = this.order.filter((i) => this.labels[i].width > 0 && this.labels[i].height > 0);
-    // A cluster too large for one column is split again with a shorter reach.
+    // A cluster too large for one column is split again with a shorter reach, and when its
+    // anchors are all that close, cut in two at the median of its longer side.
+    const halve = (group: number[]): number[][] => {
+      if (group.length <= ALIGN_MAX) return [group];
+      const spread = (axis: 'x' | 'y') => Math.max(...group.map((i) => this.labels[i][axis])) - Math.min(...group.map((i) => this.labels[i][axis]));
+      const axis = spread('x') >= spread('y') ? 'x' : 'y';
+      const sorted = group.slice().sort((a, b) => this.labels[a][axis] - this.labels[b][axis]);
+      const mid = sorted.length >> 1;
+      const order = new Map(this.order.map((i, r) => [i, r]));
+      const byRank = (g: number[]) => g.sort((a, b) => order.get(a)! - order.get(b)!);
+      return [...halve(byRank(sorted.slice(0, mid))), ...halve(byRank(sorted.slice(mid)))];
+    };
     const split = (group: number[], reach: number): number[][] =>
-      group.length <= ALIGN_MAX || reach < this.unit
+      group.length <= ALIGN_MAX
         ? [group]
-        : this.clusters(group, (a, b) => Math.hypot(this.labels[a].x - this.labels[b].x, this.labels[a].y - this.labels[b].y) <= reach).flatMap((g) => split(g, reach * 0.7));
+        : reach < this.unit
+          ? halve(group)
+          : this.clusters(group, (a, b) => Math.hypot(this.labels[a].x - this.labels[b].x, this.labels[a].y - this.labels[b].y) <= reach).flatMap((g) => split(g, reach * 0.7));
     for (const cluster of this.clusters(named, near).flatMap((g) => split(g, ALIGN_REACH * this.unit * 0.7))) {
       if (cluster.length < ALIGN_MIN) continue;
       // Callouts, pinned, forced, sticky and inside labels stay; so do labels without leaders.

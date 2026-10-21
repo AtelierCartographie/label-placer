@@ -120,6 +120,7 @@ A label next to its symbol is ambiguous when another symbol, or a bare anchor, i
 - No leader while the gap between the symbol and the label box stays under `minGap`.
 - The leader starts `symbolGap` away from the symbol's edge.
 - `octilinear` (default): a 45° leg out of the symbol, then a horizontal leg into the middle of the facing side, or a vertical leg into the top or bottom edge. Every segment is horizontal, vertical or diagonal.
+- `orthogonal`: a vertical leg out of the symbol, then a horizontal one into the middle of the facing side, or the reverse into the top or bottom edge, as on many of the Atelier's maps.
 - `straight`: a single segment to the same port.
 
 A leader never crosses another label, another leader, or a hard obstacle, except for a `required` label left with no other way. Across a small (soft) symbol it pays the soft cost of a strip one label height wide. Restrict leaders to the labels that deserve them with `leader: false` on the others.
@@ -221,6 +222,10 @@ Costs are in position-rank units: the n-th preferred position costs n.
 
 Inspirations, none of whose code is reused: Imhof's position preferences, reordered after the Atelier's practice; Christensen, Marks & Shieber (1995) on point-feature label placement; the FALP and ejection-chain search of QGIS's PAL; MapLibre's sticky anchors and grid index; vega-label's occupancy bitmap; d3-annotation's connectors; Philippe Rivière's *Automated label placement (France)* notebook; Bekos, Kaufmann, Symvonis & Wolff (2007) on boundary labeling; the excentric and aligned callouts of the Atelier's maps.
 
+## Demo
+
+`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie` or `?zone=monde` switches its data from Bretagne to the communes of Normandie or to the countries of the world (Equal Earth), to see the engine at other scales.
+
 ## Benchmark
 
 `node bench/run.ts [--svg]` places the names of French communes next to proportional symbols of births (INSEE 2018) on an A4 landscape page, with a legend as obstacle. Apple M4 Max, Node 22, one thread:
@@ -243,6 +248,10 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 ## Roadmap
 
 - Callouts along the top and bottom edges, and an exact boundary labeling (minimal total leader length without crossings).
+- Columns that take along the labels in their leaders' way and route leaders between them, for Europe on a world map.
+- Columns above or below a cluster, labels stacked with vertical leaders from their start.
+- Group labels: one block listing a group too dense to name one by one ("Caraïbes, du Nord au Sud : …").
+- Filled polygon obstacles: masks for interrupted projections, land as a soft obstacle so that labels prefer the sea.
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.
 - A demo page rendering the same placement with SVG, Canvas and deck.gl.

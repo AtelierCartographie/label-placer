@@ -7,7 +7,9 @@ export interface LeaderParams {
   box: Box;
   /**
    * `octilinear`: a 45° leg out of the symbol, then a horizontal leg into the facing side
-   * or a vertical leg into the top or bottom edge. `straight`: one segment to the same port.
+   * or a vertical leg into the top or bottom edge. `orthogonal`: a vertical leg out of the
+   * symbol then a horizontal one into the side, or the reverse into an edge. `straight`: one
+   * segment to the same port.
    */
   style?: LeaderStyle;
   /** Clear space kept between the symbol and the start of the leader. */
@@ -113,9 +115,18 @@ export function leaderGeometry({ anchor, symbol, box, style = 'octilinear', symb
     return start ? toAbsolute([start, port]) : null;
   }
 
-  const elbow: Point = end === 'horizontal' ? [sign(px) * Math.abs(py), py] : end === 'vertical' ? [px, sign(py) * Math.abs(px)] : port;
+  const elbow: Point =
+    style === 'orthogonal'
+      ? end === 'vertical'
+        ? [px, 0]
+        : [0, py]
+      : end === 'horizontal'
+        ? [sign(px) * Math.abs(py), py]
+        : end === 'vertical'
+          ? [px, sign(py) * Math.abs(px)]
+          : port;
   const start = startOn(elbow[0], elbow[1]);
-  if (start) return toAbsolute(elbow === port ? [start, port] : [start, elbow, port]);
+  if (start) return toAbsolute(elbow[0] === px && elbow[1] === py ? [start, port] : [start, elbow, port]);
 
   // The bend falls inside the buffer: leave it along the last leg's line.
   const reach = buffered(symbolExtent(symbol, end === 'vertical' ? 0 : sign(px), end === 'vertical' ? sign(py) : 0, anchor));

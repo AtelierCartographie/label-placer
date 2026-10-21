@@ -127,4 +127,12 @@ describe('flushAlignment', () => {
   it('centers a label that still covers its anchor', () => {
     expect(flushAlignment([0, 0], box([4, -2], [20, 6]))).toBe('middle');
   });
+
+  it('routes orthogonal leaders with horizontal and vertical legs only', () => {
+    // Up and to the right: a vertical leg out of the circle, then a horizontal one into the side.
+    const lead = leaderGeometry({ anchor: [0, 0], symbol: { type: 'circle', radius: 5 }, box: box([60, -30], [20, 6]), style: 'orthogonal', symbolGap: 2 })!;
+    expect(rounded(lead)).toEqual([[0, -7], [0, -30], [40, -30]]);
+    // Level with the anchor: one horizontal segment from the buffer.
+    expect(rounded(leaderGeometry({ anchor: [0, 0], symbol: { type: 'circle', radius: 5 }, box: box([60, 2], [20, 6]), style: 'orthogonal', symbolGap: 2 }))).toEqual([[6.71, 2], [40, 2]]);
+  });
 });

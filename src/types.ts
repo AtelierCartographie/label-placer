@@ -80,9 +80,11 @@ export type Obstacle =
 
 /**
  * `octilinear`: a 45° leg out of the symbol, then a horizontal leg into the facing side or a
- * vertical leg into the top or bottom edge. `straight`: one segment to the same port.
+ * vertical leg into the top or bottom edge. `orthogonal`: a vertical leg out of the symbol then
+ * a horizontal one into the side, or the reverse into an edge. `straight`: one segment to the
+ * same port.
  */
-export type LeaderStyle = 'octilinear' | 'straight';
+export type LeaderStyle = 'octilinear' | 'orthogonal' | 'straight';
 
 export type TextAnchor = 'start' | 'middle' | 'end';
 
