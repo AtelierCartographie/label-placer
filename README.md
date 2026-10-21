@@ -90,7 +90,7 @@ Breaking and measuring text needs the fonts, so it stays with the caller. The ca
 - Inside, the label is centered on its anchor (a pole of inaccessibility is a good one), or shifted on a grid around it, wholly inside.
 - Outside, the positions start where the outline crosses the direction from the anchor, with leaders starting on the outline.
 - Across the outline, a candidate is discarded: a label of a coastal département sits on land or at sea, never on the coastline.
-- Outside its polygon, a label must not land in, or across, another label's polygon: that costs the full ambiguity cost.
+- Outside its polygon, a label next to it must not land in, or across, another label's polygon. With a leader it may, at the ambiguity cost: the leader names its feature (small areas, such as the départements around Paris).
 
 ### Line obstacles
 

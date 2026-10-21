@@ -129,7 +129,7 @@ export class Placer {
     this.ambiguityMargin = options.ambiguity?.margin ?? 0.5 * unit;
     this.features = this.ambiguityCost > 0 ? new Features(labels, options.bounds, unit * 2) : null;
     this.resolved = new Uint8Array(n);
-    // Polygons, for a label set outside its own one: it must not land in another.
+    // Polygons, for a label next to its own one: it must not land in another.
     this.polygons = new Grid(bx0, by0, bx1, by1, unit * 4);
     labels.forEach((l, k) => {
       if (l.symbol?.type !== 'polygon') return;
@@ -169,8 +169,12 @@ export class Placer {
         const own = c.placement === 'inside' && ownHard ? raster.cellCount(box) : 0;
         const coverage = raster.hardCoverage(box) - own;
         const lines = raster.lineCoverage(box);
-        // Wholly inside its polygon (the inside candidates are), or wholly outside.
-        const astride = l.symbol?.type === 'polygon' && c.placement !== 'center' && boxRelation(box, l.symbol.rings, this.polygonBoxes[i]) !== 'outside';
+        // Wholly inside its polygon (the inside candidates are), or wholly outside, and then, unless
+        // a leader names it, out of the other polygons.
+        const astride =
+          l.symbol?.type === 'polygon' &&
+          c.placement !== 'center' &&
+          (boxRelation(box, l.symbol.rings, this.polygonBoxes[i]) !== 'outside' || (c.ring === 0 && this.inOtherPolygon(i, box)));
         let crossed = 0;
         let softCrossed = 0;
         for (let k = 1; k < (c.leader?.length ?? 0); k++) {
@@ -180,6 +184,8 @@ export class Placer {
         const hit = hardRects.some((r) => boxesOverlap(c.x0, c.y0, c.x1, c.y1, r[0], r[1], r[2], r[3])) || coverage > 0 || crossed > 0 || lines > 0 || astride;
         // A leader over a symbol, or a soft line under a box, counts as a strip one label height wide.
         if (softCost > 0) c.cost += (softCost * (raster.softArea(box) + (softCrossed + raster.softLineLength(box)) * unit)) / (unit * unit);
+        // A leader names its polygon, but the label is still better out of the others.
+        if (l.symbol?.type === 'polygon' && c.ring > 0 && this.inOtherPolygon(i, box)) c.cost += this.ambiguityCost;
         if (outside || hit) {
           const area = (c.x1 - c.x0) * (c.y1 - c.y0);
           c.hard = (coverage + lines) / (resolution * resolution) + crossed * unit + areaOutside(box, options.bounds) + (astride ? area / 2 : 0);
@@ -218,8 +224,7 @@ export class Placer {
       if (c.ring > 0 || c.placement === 'inside' || c.placement === 'center') continue;
       const box: Box = [c.x0, c.y0, c.x1, c.y1];
       const own = symbol?.type === 'polygon' ? boxRingsDistance(box, symbol.rings) : undefined;
-      const ambiguity = own !== undefined && this.inOtherPolygon(i, box) ? 1 : this.features.ambiguity(i, box, this.ambiguityMargin, own);
-      c.cost += this.ambiguityCost * ambiguity;
+      c.cost += this.ambiguityCost * this.features.ambiguity(i, box, this.ambiguityMargin, own);
     }
     list.sort((a, b) => a.cost - b.cost);
     return list;

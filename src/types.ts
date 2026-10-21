@@ -24,7 +24,8 @@ export type LabelSymbol =
   | { type: 'area'; inscribedRadius: number }
   /**
    * An area feature with its outline, in the caller's units (simplified: every candidate is
-   * tested against every edge). The label goes wholly inside, or wholly outside, never across.
+   * tested against every edge). The label goes wholly inside, or wholly outside, never across,
+   * and next to it, out of the other polygons.
    */
   | { type: 'polygon'; rings: Point[][] };
 
