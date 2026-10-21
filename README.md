@@ -3,9 +3,11 @@
 Automatic label placement for **maps** and **charts**, independent of the renderer. Give it anchors, label sizes, symbols, priorities and obstacles. It returns where each label goes, how to align its text, and the leader line that joins it to its feature when it had to move away. Draw the result with SVG, Canvas, WebGL or a map library.
 
 - Ordered candidate positions around point symbols (by default the sides first, right, above, left, below, then the corners), inside a symbol when the label fits, centered on areas.
+- Polygons: a label goes wholly inside its polygon, or wholly outside, never across its outline.
+- Several layouts per label (one line, two lines...): the engine picks the one that fits.
 - No ambiguity: a label avoids spots as close to another symbol as to its own.
 - Priorities and a hierarchy of modes: `pinned` (placed by hand), `required` (never hidden), `optional`.
-- Obstacles: other symbols, legend, title, any rectangle or circle, with hard and soft costs.
+- Obstacles: other symbols, legend, title, any rectangle or circle, lines such as coastlines, with hard and soft costs.
 - Leader lines with cartographic rules: octilinear routes, a clear buffer around the symbol, and no leader while the label still reads as attached.
 - Flush alignment: a label is left-aligned on the right of its feature, right-aligned on the left, centered above or below.
 - A deterministic optimizer (ejection chains) on top of a fast greedy pass, and sticky placements across re-runs.
@@ -71,11 +73,28 @@ The optimizer never hides a label to show one of lower or equal priority.
 Each movable label tries, in order of cost:
 
 1. `inside` its symbol, when the box fits in it (`inside: false` to disable);
-2. `center` for an `area` symbol, cheaper when the label fits in the inscribed circle;
+2. `center` for an `area` symbol, cheaper when the label fits in the inscribed circle, or for a `polygon` symbol, wholly inside it: on the anchor, else shifted by up to three label heights across and two along (0.5 per label height);
 3. the `positions` around the symbol, in order of preference (default: `right`, `top`, `left`, `bottom`, `top-right`, `top-left`, `bottom-right`, `bottom-left`: the practice of the Atelier de cartographie, sides before corners);
 4. the same positions on farther rings, with a leader line (`leader.rings`, default one and two label heights).
 
 A candidate blocked by a hard obstacle or outside the bounds is discarded. A soft obstacle adds a cost per area covered.
+
+### Layouts
+
+Breaking and measuring text needs the fonts, so it stays with the caller. The caller can give other `layouts` of a label, measured beforehand: on two lines, abbreviated. Each is tried like the main `width` × `height`, at an extra `cost` (default 0.5), and `PlacedLabel.layout` tells which won (0 for the main one, k for `layouts[k - 1]`). Draw the lines flushed by `textAnchor`, within `box`. A label on two lines then fits inside a circle or a polygon where one line would not.
+
+### Polygons
+
+`{ type: 'polygon', rings }` gives an area with its outline, in the caller's units, outer ring and holes alike (even-odd rule). Simplify the outlines: every candidate is tested against every edge of its own polygon.
+
+- Inside, the label is centered on its anchor (a pole of inaccessibility is a good one), or shifted on a grid around it, wholly inside.
+- Outside, the positions start where the outline crosses the direction from the anchor, with leaders starting on the outline.
+- Across the outline, a candidate is discarded: a label of a coastal département sits on land or at sea, never on the coastline.
+- Outside its polygon, a label must not land in, or across, another label's polygon: that costs the full ambiguity cost.
+
+### Line obstacles
+
+`{ type: 'line', points, soft? }` (coastline, border, river) keeps label boxes off a line; leaders may cross it. A soft line costs `symbolObstacles.softCost` per label height of line under the box.
 
 ### Symbols as obstacles
 
@@ -153,14 +172,14 @@ new TextLayer({
 
 ### `placeLabels(labels, options): PlacementResult`
 
-`LabelInput`: `id?`, `x`, `y`, `width`, `height` (both 0 for a symbol without a label), `symbol?` (`{ type: 'circle', radius }`, `{ type: 'rect', width, height }` or `{ type: 'area', inscribedRadius }`), `priority?`, `mode?`, `offset?` (pinned), `leader?` (default true).
+`LabelInput`: `id?`, `x`, `y`, `width`, `height` (both 0 for a symbol without a label), `layouts?` (`[{ width, height, cost? }]`), `symbol?` (`{ type: 'circle', radius }`, `{ type: 'rect', width, height }`, `{ type: 'area', inscribedRadius }` or `{ type: 'polygon', rings }`), `priority?`, `mode?`, `offset?` (pinned), `leader?` (default true).
 
 `PlaceOptions`:
 
 | Option             | Default (h = median label height)                | Description                                                        |
 | ------------------ | ------------------------------------------------ | ------------------------------------------------------------------ |
 | `bounds`           | required                                         | `[x0, y0, x1, y1]` labels must stay in                             |
-| `obstacles`        | `[]`                                             | `{ type: 'rect', box, soft? }`, `{ type: 'circle', x, y, radius, soft? }` |
+| `obstacles`        | `[]`                                             | `{ type: 'rect', box, soft? }`, `{ type: 'circle', x, y, radius, soft? }`, `{ type: 'line', points, soft? }` |
 | `positions`        | sides, then corners                              | candidate positions, by preference                                 |
 | `gap`              | `0.2h`                                           | space between a symbol and an adjacent label                       |
 | `inside`           | `true`                                           | try the label inside its symbol                                    |
@@ -175,7 +194,7 @@ new TextLayer({
 
 Costs are in position-rank units: the n-th preferred position costs n.
 
-`PlacedLabel`: `index`, `id`, `visible`, `placement`, `ring`, `x`, `y`, `textAnchor`, `baseline`, `offset`, `box`, `leader`, `overlapping`.
+`PlacedLabel`: `index`, `id`, `visible`, `placement`, `ring`, `layout`, `x`, `y`, `textAnchor`, `baseline`, `offset`, `box`, `leader`, `overlapping`.
 
 ### `leaderGeometry({ anchor, symbol?, box, style?, symbolGap?, minGap? }): Point[] | null`
 
@@ -212,8 +231,10 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 
 ## Roadmap
 
+- Aligned labels: the labels of a dense cluster that need leaders, stacked in a column beside it in the order of their anchors, so that leaders never cross.
+- Boundary labeling: chosen labels (callouts on several lines) in columns along the edge of the map, with orthogonal leaders.
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.
 - A demo page rendering the same placement with SVG, Canvas and deck.gl.
 
-Out of scope: labels along lines and curved labels.
+Out of scope: labels along lines and curved labels; breaking and measuring text, left to the caller (see Layouts).

@@ -19,4 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ambiguity cost: a label avoids spots as close to another symbol as to its own (`ambiguity`)
 - Labels with no size stand for symbols without a label: obstacles and features for the others
 - `required` labels try one farther leader ring, then overlap where they cover the least of the hard obstacles
+- `layouts`: other measured layouts of a label (two lines...), tried at a small extra cost
+- `polygon` symbols: labels wholly inside their polygon, or wholly outside it and out of the others
+- `line` obstacles (coastlines, borders): they keep label boxes off, not leaders
 - Benchmark on French communes

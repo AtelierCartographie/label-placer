@@ -1,3 +1,4 @@
+import { rayExit } from './polygon.ts';
 import type { Box, LabelSymbol, LeaderStyle, Point, TextAnchor } from './types.ts';
 
 export interface LeaderParams {
@@ -88,7 +89,7 @@ export function leaderGeometry({ anchor, symbol, box, style = 'octilinear', symb
   const nearest: Point = [clamp(0, cx - hw, cx + hw), clamp(0, cy - hh, cy + hh)];
   const nearestDistance = Math.hypot(nearest[0], nearest[1]);
   if (nearestDistance === 0) return null;
-  const extentToNearest = symbolExtent(symbol, nearest[0] / nearestDistance, nearest[1] / nearestDistance);
+  const extentToNearest = symbolExtent(symbol, nearest[0] / nearestDistance, nearest[1] / nearestDistance, anchor);
   if (nearestDistance - extentToNearest < minGap) return null;
 
   const g = gaps(center, half);
@@ -103,7 +104,7 @@ export function leaderGeometry({ anchor, symbol, box, style = 'octilinear', symb
   const startOn = (tx: number, ty: number): Point | null => {
     const d = Math.hypot(tx, ty);
     if (d === 0) return null;
-    const reach = buffered(symbolExtent(symbol, tx / d, ty / d));
+    const reach = buffered(symbolExtent(symbol, tx / d, ty / d, anchor));
     return reach < d ? [(tx / d) * reach, (ty / d) * reach] : null;
   };
 
@@ -117,7 +118,7 @@ export function leaderGeometry({ anchor, symbol, box, style = 'octilinear', symb
   if (start) return toAbsolute(elbow === port ? [start, port] : [start, elbow, port]);
 
   // The bend falls inside the buffer: leave it along the last leg's line.
-  const reach = buffered(symbolExtent(symbol, end === 'vertical' ? 0 : sign(px), end === 'vertical' ? sign(py) : 0));
+  const reach = buffered(symbolExtent(symbol, end === 'vertical' ? 0 : sign(px), end === 'vertical' ? sign(py) : 0, anchor));
   const fallback: Point =
     end === 'vertical'
       ? [px, sign(py) * Math.sqrt(Math.max(0, reach * reach - px * px))]
@@ -126,7 +127,7 @@ export function leaderGeometry({ anchor, symbol, box, style = 'octilinear', symb
 }
 
 /** Distance from the anchor to the symbol's edge along the unit vector (ux, uy). */
-export function symbolExtent(symbol: LabelSymbol | undefined, ux: number, uy: number): number {
+export function symbolExtent(symbol: LabelSymbol | undefined, ux: number, uy: number, anchor?: Point): number {
   if (!symbol) return 0;
   switch (symbol.type) {
     case 'circle':
@@ -138,5 +139,7 @@ export function symbolExtent(symbol: LabelSymbol | undefined, ux: number, uy: nu
     }
     case 'area':
       return 0;
+    case 'polygon':
+      return anchor ? rayExit(anchor[0], anchor[1], ux, uy, symbol.rings) : 0;
   }
 }

@@ -21,7 +21,12 @@ export type LabelSymbol =
   | { type: 'circle'; radius: number }
   | { type: 'rect'; width: number; height: number }
   /** An area feature labelled at an interior point, with the radius of the largest circle it contains. */
-  | { type: 'area'; inscribedRadius: number };
+  | { type: 'area'; inscribedRadius: number }
+  /**
+   * An area feature with its outline, in the caller's units (simplified: every candidate is
+   * tested against every edge). The label goes wholly inside, or wholly outside, never across.
+   */
+  | { type: 'polygon'; rings: Point[][] };
 
 /**
  * - `pinned`: placed at `offset`, never moved, an obstacle for every other label.
@@ -39,6 +44,12 @@ export interface LabelInput {
   /** Size of the box the label occupies, padding and halo included. */
   width: number;
   height: number;
+  /**
+   * Other ways to set the label, measured by the caller: on two lines, abbreviated... Each is
+   * tried like the main one, at an extra `cost` (default 0.5). `PlacedLabel.layout` tells which
+   * won: 0 for `width` × `height`, k for `layouts[k - 1]`. Pinned labels keep the main one.
+   */
+  layouts?: { width: number; height: number; cost?: number }[];
   symbol?: LabelSymbol;
   /** Higher wins. Defaults to 0. */
   priority?: number;
@@ -49,9 +60,14 @@ export interface LabelInput {
   leader?: boolean;
 }
 
+/**
+ * A `line` (coastline, border, river) is an obstacle for label boxes only: leaders may cross
+ * it. Soft, it costs `symbolObstacles.softCost` per label height of line under the box.
+ */
 export type Obstacle =
   | { type: 'rect'; box: Box; soft?: boolean }
-  | { type: 'circle'; x: number; y: number; radius: number; soft?: boolean };
+  | { type: 'circle'; x: number; y: number; radius: number; soft?: boolean }
+  | { type: 'line'; points: Point[]; soft?: boolean };
 
 /**
  * `octilinear`: a 45° leg out of the symbol, then a horizontal leg into the facing side or a
@@ -127,6 +143,8 @@ export interface PlacedLabel {
   placement: Placement | null;
   /** 0 next to the symbol, n for the n-th leader ring. */
   ring: number;
+  /** Which layout won: 0 for the label's `width` × `height`, k for `layouts[k - 1]`. */
+  layout: number;
   /** Point to draw the text at, with `textAnchor` and `baseline`. */
   x: number;
   y: number;

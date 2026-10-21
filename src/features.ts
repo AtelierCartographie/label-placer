@@ -36,7 +36,8 @@ export class Features {
     this.nx = Math.max(1, Math.ceil((bounds[2] - bounds[0]) / size));
     this.ny = Math.max(1, Math.ceil((bounds[3] - bounds[1]) / size));
 
-    // Areas are labelled at an interior point, which is not a feature on the map.
+    // Areas are labelled at an interior point, which is not a feature on the map; polygons
+    // are compared with polygons only, by the engine.
     const ranges: [number, number, number, number][] = [];
     const counts = new Int32Array(this.nx * this.ny + 1);
     labels.forEach((l, k) => {
@@ -50,7 +51,7 @@ export class Features {
         this.hw[k] = s.width / 2;
         this.hh[k] = s.height / 2;
       }
-      if (s?.type === 'area') return;
+      if (s?.type === 'area' || s?.type === 'polygon') return;
       const r = this.range(l.x - this.hw[k], l.y - this.hh[k], l.x + this.hw[k], l.y + this.hh[k]);
       ranges[k] = r;
       for (let j = r[1]; j <= r[3]; j++) for (let i = r[0]; i <= r[2]; i++) counts[j * this.nx + i + 1]++;
@@ -74,12 +75,12 @@ export class Features {
   }
 
   /**
-   * From 0, every other feature at least `margin` farther from the box than feature i, to 1,
-   * one as close. A feature whose anchor the box covers is hidden by the label: the soft
+   * From 0, every other feature at least `margin` farther from the box than feature i (or
+   * than `own`), to 1, one as close. A feature whose anchor the box covers is hidden by the label: the soft
    * cost handles it.
    */
-  ambiguity(i: number, [x0, y0, x1, y1]: Box, margin: number): number {
-    const reach = this.distance(i, x0, y0, x1, y1) + margin;
+  ambiguity(i: number, [x0, y0, x1, y1]: Box, margin: number, own = this.distance(i, x0, y0, x1, y1)): number {
+    const reach = own + margin;
     const [i0, j0, i1, j1] = this.range(x0 - reach, y0 - reach, x1 + reach, y1 + reach);
     const visit = ++this.visit;
     let worst = 0;

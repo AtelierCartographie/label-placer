@@ -15,6 +15,11 @@ export class ObstacleRaster {
   private readonly soft: Uint16Array;
   private hardSat: Float64Array | null = null;
   private softSat: Float64Array | null = null;
+  /** Lines, kept apart because they block label boxes, not leaders. Allocated on first use. */
+  private lineHard: Uint16Array | null = null;
+  private lineSoft: Uint16Array | null = null;
+  private lineHardSat: Float64Array | null = null;
+  private lineSoftSat: Float64Array | null = null;
 
   constructor(bounds: Box, resolution: number) {
     this.bx0 = bounds[0];
@@ -59,9 +64,54 @@ export class ObstacleRaster {
     for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) if (target[j * this.width + i] < 65535) target[j * this.width + i]++;
   }
 
+  /** Mark every cell the polyline passes through (Amanatides & Woo traversal). */
+  addLine(points: [number, number][], soft: boolean): void {
+    const n = this.width * this.height;
+    const target = soft ? (this.lineSoft ??= new Uint16Array(n)) : (this.lineHard ??= new Uint16Array(n));
+    const { width: W, height: H, res } = this;
+    for (let k = 1; k < points.length; k++) {
+      const px = (points[k - 1][0] - this.bx0) * res;
+      const py = (points[k - 1][1] - this.by0) * res;
+      const dx = (points[k][0] - this.bx0) * res - px;
+      const dy = (points[k][1] - this.by0) * res - py;
+      let i = Math.floor(px);
+      let j = Math.floor(py);
+      const iEnd = Math.floor(px + dx);
+      const jEnd = Math.floor(py + dy);
+      const si = Math.sign(dx);
+      const sj = Math.sign(dy);
+      const ti = si === 0 ? Infinity : Math.abs(1 / dx);
+      const tj = sj === 0 ? Infinity : Math.abs(1 / dy);
+      let ni = si > 0 ? (i + 1 - px) * ti : si < 0 ? (px - i) * ti : Infinity;
+      let nj = sj > 0 ? (j + 1 - py) * tj : sj < 0 ? (py - j) * tj : Infinity;
+      for (let steps = Math.abs(iEnd - i) + Math.abs(jEnd - j); steps >= 0; steps--) {
+        if (i >= 0 && j >= 0 && i < W && j < H && target[j * W + i] < 65535) target[j * W + i]++;
+        if (ni < nj) {
+          ni += ti;
+          i += si;
+        } else {
+          nj += tj;
+          j += sj;
+        }
+      }
+    }
+  }
+
   finalize(): void {
     this.hardSat = this.sat(this.hard);
     this.softSat = this.sat(this.soft);
+    if (this.lineHard) this.lineHardSat = this.sat(this.lineHard);
+    if (this.lineSoft) this.lineSoftSat = this.sat(this.lineSoft);
+  }
+
+  /** Cells of hard lines under the box (centers inside it). */
+  lineCoverage(box: Box): number {
+    return this.lineHardSat ? this.sum(this.lineHardSat, box) : 0;
+  }
+
+  /** Length of soft lines under the box, in units, counted one cell per cell. */
+  softLineLength(box: Box): number {
+    return this.lineSoftSat ? this.sum(this.lineSoftSat, box) / this.res : 0;
   }
 
   /** Summed hard coverage of the cells whose centers lie inside the box. */

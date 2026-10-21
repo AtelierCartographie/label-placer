@@ -4,6 +4,7 @@ import { Features } from './features.ts';
 import { Grid } from './grid.ts';
 import { flushAlignment, leaderGeometry } from './leader.ts';
 import { ObstacleRaster } from './obstacles.ts';
+import { boxRelation, boxRingsDistance, ringsBox } from './polygon.ts';
 import type { Box, LabelInput, LabelMode, PlaceOptions, PlacedLabel, PlacementResult, Point } from './types.ts';
 
 const MODE_RANK: Record<LabelMode, number> = { pinned: 0, required: 1, optional: 2 };
@@ -70,6 +71,8 @@ export class Placer {
   private readonly ambiguityCost: number;
   private readonly ambiguityMargin: number;
   private readonly resolved: Uint8Array;
+  private readonly polygons: Grid;
+  private readonly polygonBoxes: Box[] = [];
   work = 0;
 
   constructor(labels: LabelInput[], options: PlaceOptions) {
@@ -114,6 +117,7 @@ export class Placer {
     const hardRects: Box[] = [];
     for (const o of options.obstacles ?? []) {
       if (o.type === 'circle') raster.addCircle(o.x, o.y, o.radius, o.soft ?? false);
+      else if (o.type === 'line') raster.addLine(o.points, o.soft ?? false);
       else {
         raster.addRect(o.box, o.soft ?? false);
         if (!o.soft) hardRects.push(o.box);
@@ -125,6 +129,13 @@ export class Placer {
     this.ambiguityMargin = options.ambiguity?.margin ?? 0.5 * unit;
     this.features = this.ambiguityCost > 0 ? new Features(labels, options.bounds, unit * 2) : null;
     this.resolved = new Uint8Array(n);
+    // Polygons, for a label set outside its own one: it must not land in another.
+    this.polygons = new Grid(bx0, by0, bx1, by1, unit * 4);
+    labels.forEach((l, k) => {
+      if (l.symbol?.type !== 'polygon') return;
+      const b = (this.polygonBoxes[k] = ringsBox(l.symbol.rings));
+      this.polygons.insert(k, b[0], b[1], b[2], b[3]);
+    });
 
     for (let i = 0; i < n; i++) {
       const l = labels[i];
@@ -157,17 +168,21 @@ export class Placer {
         const outside = c.bx0 < bx0 || c.by0 < by0 || c.bx1 > bx1 || c.by1 > by1;
         const own = c.placement === 'inside' && ownHard ? raster.cellCount(box) : 0;
         const coverage = raster.hardCoverage(box) - own;
+        const lines = raster.lineCoverage(box);
+        // Wholly inside its polygon (the inside candidates are), or wholly outside.
+        const astride = l.symbol?.type === 'polygon' && c.placement !== 'center' && boxRelation(box, l.symbol.rings, this.polygonBoxes[i]) !== 'outside';
         let crossed = 0;
         let softCrossed = 0;
         for (let k = 1; k < (c.leader?.length ?? 0); k++) {
           crossed += raster.coveredLength(...c.leader![k - 1], ...c.leader![k]);
           softCrossed += raster.coveredLength(...c.leader![k - 1], ...c.leader![k], true);
         }
-        const hit = hardRects.some((r) => boxesOverlap(c.x0, c.y0, c.x1, c.y1, r[0], r[1], r[2], r[3])) || coverage > 0 || crossed > 0;
-        // A leader over a symbol counts as a strip one label height wide.
-        if (softCost > 0) c.cost += (softCost * (raster.softArea(box) + softCrossed * unit)) / (unit * unit);
+        const hit = hardRects.some((r) => boxesOverlap(c.x0, c.y0, c.x1, c.y1, r[0], r[1], r[2], r[3])) || coverage > 0 || crossed > 0 || lines > 0 || astride;
+        // A leader over a symbol, or a soft line under a box, counts as a strip one label height wide.
+        if (softCost > 0) c.cost += (softCost * (raster.softArea(box) + (softCrossed + raster.softLineLength(box)) * unit)) / (unit * unit);
         if (outside || hit) {
-          c.hard = coverage / (resolution * resolution) + crossed * unit + areaOutside(box, options.bounds);
+          const area = (c.x1 - c.x0) * (c.y1 - c.y0);
+          c.hard = (coverage + lines) / (resolution * resolution) + crossed * unit + areaOutside(box, options.bounds) + (astride ? area / 2 : 0);
           ko.push(c);
         } else (c.ring > settings.rings.length ? far : ok).push(c);
       }
@@ -197,12 +212,29 @@ export class Placer {
     const list = this.feasible[i];
     if (!this.features || this.resolved[i]) return list;
     this.resolved[i] = 1;
-    if (this.labels[i].symbol?.type === 'area' || this.mode(i) === 'pinned') return list;
-    for (const c of list)
-      if (c.ring === 0 && c.placement !== 'inside')
-        c.cost += this.ambiguityCost * this.features.ambiguity(i, [c.x0, c.y0, c.x1, c.y1], this.ambiguityMargin);
+    const symbol = this.labels[i].symbol;
+    if (symbol?.type === 'area' || this.mode(i) === 'pinned') return list;
+    for (const c of list) {
+      if (c.ring > 0 || c.placement === 'inside' || c.placement === 'center') continue;
+      const box: Box = [c.x0, c.y0, c.x1, c.y1];
+      const own = symbol?.type === 'polygon' ? boxRingsDistance(box, symbol.rings) : undefined;
+      const ambiguity = own !== undefined && this.inOtherPolygon(i, box) ? 1 : this.features.ambiguity(i, box, this.ambiguityMargin, own);
+      c.cost += this.ambiguityCost * ambiguity;
+    }
     list.sort((a, b) => a.cost - b.cost);
     return list;
+  }
+
+  /** Whether the box of polygon label i lies in, or across, another label's polygon. */
+  private inOtherPolygon(i: number, box: Box): boolean {
+    const [i0, j0, i1, j1] = this.polygons.range(box[0], box[1], box[2], box[3]);
+    for (let j = j0; j <= j1; j++)
+      for (let ii = i0; ii <= i1; ii++)
+        for (const k of this.polygons.cells[j * this.polygons.nx + ii]) {
+          const s = this.labels[k].symbol;
+          if (k !== i && s?.type === 'polygon' && boxRelation(box, s.rings, this.polygonBoxes[k]) !== 'outside') return true;
+        }
+    return false;
   }
 
   private priority(i: number): number {
@@ -404,6 +436,7 @@ export class Placer {
           visible: false,
           placement: null,
           ring: 0,
+          layout: 0,
           x: l.x,
           y: l.y,
           textAnchor: 'middle',
@@ -421,6 +454,7 @@ export class Placer {
         visible: true,
         placement: c.placement,
         ring: c.ring,
+        layout: c.layout,
         x,
         y,
         textAnchor: c.textAnchor,
@@ -450,6 +484,6 @@ export class Placer {
   }
 }
 
-export function candidateKey(c: { placement: string | null; ring: number }): string | null {
-  return c.placement ? `${c.placement}:${c.ring}` : null;
+export function candidateKey(c: { placement: string | null; ring: number; layout?: number }): string | null {
+  return c.placement ? `${c.placement}:${c.ring}:${c.layout ?? 0}` : null;
 }

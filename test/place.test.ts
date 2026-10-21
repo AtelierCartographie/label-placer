@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_POSITIONS, placeLabels } from '../src/index.ts';
-import type { Box, LabelInput, PlacedLabel, PlaceOptions } from '../src/index.ts';
+import type { Box, LabelInput, PlacedLabel, PlaceOptions, Point } from '../src/index.ts';
 
 function mulberry32(seed: number) {
   return () => {
@@ -260,6 +260,53 @@ describe('placeLabels', () => {
     });
     expect(r.labels[0].placement).toBe('left');
     expect(r.labels[0].ring).toBe(1);
+  });
+
+  it('sets a label on two lines when one line does not fit', () => {
+    const label: LabelInput = { x: 100, y: 100, width: 100, height: 10, layouts: [{ width: 60, height: 20 }], symbol: { type: 'circle', radius: 3 } };
+    const options: PlaceOptions = { bounds: [0, 0, 300, 200], positions: ['right'], leader: false, obstacles: [{ type: 'rect', box: [170, 95, 180, 105] }] };
+    const r = placeLabels([label], options).labels[0];
+    expect(r.layout).toBe(1);
+    expect(r.box).toEqual([105, 90, 165, 110]);
+    expect(placeLabels([{ ...label, layouts: undefined }], options).labels[0].visible).toBe(false);
+    // Inside a circle only the compact layout fits.
+    const inside = placeLabels([{ ...label, symbol: { type: 'circle', radius: 30 }, layouts: [{ width: 40, height: 20 }] }], { bounds: [0, 0, 300, 200] }).labels[0];
+    expect([inside.placement, inside.layout]).toEqual(['inside', 1]);
+  });
+
+  it('keeps a polygon label wholly inside its polygon, shifted from the anchor if needed', () => {
+    // A coastal area: its anchor sits too close to the coast at x = 100 for a centered label.
+    const area: LabelInput = { x: 80, y: 50, width: 50, height: 10, symbol: { type: 'polygon', rings: [[[0, 0], [100, 0], [100, 100], [0, 100]]] } };
+    const r = placeLabels([area], { bounds: [0, 0, 300, 200] }).labels[0];
+    expect(r.placement).toBe('center');
+    expect(r.box![0]).toBeGreaterThanOrEqual(0);
+    expect(r.box![2]).toBeLessThanOrEqual(100);
+  });
+
+  it('puts a polygon label that does not fit wholly outside, and not in another polygon', () => {
+    const square = (x0: number, y0: number, x1: number, y1: number) => ({ type: 'polygon' as const, rings: [[[x0, y0], [x1, y0], [x1, y1], [x0, y1]] as Point[]] });
+    const small: LabelInput = { x: 80, y: 50, width: 50, height: 10, symbol: square(60, 40, 100, 60) };
+    const r = placeLabels([small], { bounds: [0, 0, 300, 200], leader: false }).labels[0];
+    expect(r.placement).toBe('right');
+    expect(r.box![0]).toBeGreaterThanOrEqual(100);
+    // With a neighbour on the right, its label goes to the other side.
+    const neighbour: LabelInput = { x: 150, y: 20, width: 10, height: 10, symbol: square(100, 0, 200, 100) };
+    const both = placeLabels([small, neighbour], { bounds: [0, 0, 300, 200], leader: false }).labels[0];
+    expect(both.placement).toBe('left');
+    expect(both.box![2]).toBeLessThanOrEqual(60);
+  });
+
+  it('keeps label boxes off line obstacles, not leaders', () => {
+    const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 } };
+    const coast = (x: number, soft?: boolean): PlaceOptions['obstacles'] => [{ type: 'line', points: [[x, 0], [x, 200]], soft }];
+    const base: PlaceOptions = { bounds: [0, 0, 300, 200], inside: false, positions: ['right', 'left'], leader: false };
+    expect(placeLabels([label], { ...base, obstacles: coast(130) }).labels[0].placement).toBe('left');
+    expect(placeLabels([label], { ...base, obstacles: coast(130, true) }).labels[0].placement).toBe('left');
+    expect(placeLabels([label], base).labels[0].placement).toBe('right');
+    // The spot next to the symbol lies across the line; a leader may cross it to the next ring.
+    const r = placeLabels([label], { ...base, positions: ['right'], leader: { rings: [10] }, obstacles: coast(108) }).labels[0];
+    expect(r.ring).toBe(1);
+    expect(r.overlapping).toBe(false);
   });
 
   it('places more labels with ejection chains than greedily, without losing higher ones', () => {

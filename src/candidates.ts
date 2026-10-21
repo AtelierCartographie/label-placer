@@ -1,4 +1,5 @@
 import { flushAlignment, leaderGeometry, symbolExtent } from './leader.ts';
+import { boxRelation, ringsBox } from './polygon.ts';
 import type { Box, LabelInput, LeaderStyle, Placement, Point, Position, TextAnchor } from './types.ts';
 
 export interface Candidate {
@@ -12,6 +13,8 @@ export interface Candidate {
   textAnchor: TextAnchor;
   baseline: 'top' | 'middle' | 'bottom';
   leader: Point[] | null;
+  /** 0 for the label's own size, k for its `layouts[k - 1]`. */
+  layout: number;
   /**
    * Static hard coverage of a blocked candidate, as an area: hard obstacles under the box,
    * a strip one label height wide along the leader where it crosses one, the box out of
@@ -72,15 +75,46 @@ export function makeCandidate(
       bx1 = Math.max(bx1, x);
       by1 = Math.max(by1, y);
     }
-  return { x0: box[0], y0: box[1], x1: box[2], y1: box[3], cost, placement, ring, textAnchor, baseline, leader, hard: 0, bx0, by0, bx1, by1 };
+  return { x0: box[0], y0: box[1], x1: box[2], y1: box[3], cost, placement, ring, textAnchor, baseline, leader, layout: 0, hard: 0, bx0, by0, bx1, by1 };
 }
 
-/** Candidates of a movable label, sorted by cost. */
+/** Grid of offsets, in label heights, for a label inside its polygon: nearest to the anchor first. */
+const POLYGON_OFFSETS: Point[] = [];
+for (let dy = -2; dy <= 2; dy++) for (let dx = -3; dx <= 3; dx++) POLYGON_OFFSETS.push([dx, dy]);
+POLYGON_OFFSETS.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+/** Cost of moving a label inside its polygon away from its anchor, per label height. */
+const POLYGON_SHIFT_COST = 0.5;
+
+/** Candidates of a movable label, in each of its layouts, sorted by cost. */
 export function buildCandidates(label: LabelInput, s: CandidateSettings): Candidate[] {
-  const { x, y, width: w, height: h, symbol } = label;
+  const out = layoutCandidates(label, label.width, label.height, s);
+  label.layouts?.forEach((l, k) => {
+    if (!(l.width > 0 && l.height > 0)) return;
+    for (const c of layoutCandidates(label, l.width, l.height, s)) {
+      c.cost += l.cost ?? 0.5;
+      c.layout = k + 1;
+      out.push(c);
+    }
+  });
+  return out.sort((a, b) => a.cost - b.cost);
+}
+
+function layoutCandidates(label: LabelInput, w: number, h: number, s: CandidateSettings): Candidate[] {
+  const { x, y, symbol } = label;
   const out: Candidate[] = [];
 
-  if (symbol?.type === 'area') {
+  if (symbol?.type === 'polygon') {
+    if (s.inside) {
+      const bbox = ringsBox(symbol.rings);
+      for (const [ox, oy] of POLYGON_OFFSETS) {
+        const cx = x + ox * s.unit;
+        const cy = y + oy * s.unit;
+        const box: Box = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2];
+        if (boxRelation(box, symbol.rings, bbox) === 'inside')
+          out.push(makeCandidate(box, INSIDE_COST + POLYGON_SHIFT_COST * Math.hypot(ox, oy), 'center', 0, 'middle', 'middle', null));
+      }
+    }
+  } else if (symbol?.type === 'area') {
     const halfDiagonal = Math.hypot(w / 2, h / 2);
     const overflow = symbol.inscribedRadius > 0 ? Math.min(1, Math.max(0, halfDiagonal / symbol.inscribedRadius - 1)) : 1;
     out.push(makeCandidate([x - w / 2, y - h / 2, x + w / 2, y + h / 2], s.areaOverflowCost * overflow, 'center', 0, 'middle', 'middle', null));
@@ -103,7 +137,7 @@ export function buildCandidates(label: LabelInput, s: CandidateSettings): Candid
         px = x + dx * (symbol.width / 2 + reach * k);
         py = y + dy * (symbol.height / 2 + reach * k);
       } else {
-        const r = symbol ? symbolExtent(symbol, dx * k, dy * k) : 0;
+        const r = symbol ? symbolExtent(symbol, dx * k, dy * k, [x, y]) : 0;
         px = x + dx * (r + reach) * k;
         py = y + dy * (r + reach) * k;
       }
@@ -112,7 +146,7 @@ export function buildCandidates(label: LabelInput, s: CandidateSettings): Candid
       const box: Box = [x0, y0, x0 + w, y0 + h];
       const textAnchor = flushAlignment([x, y], box);
       const baseline = dy > 0 ? 'top' : dy < 0 ? 'bottom' : 'middle';
-      const rank = symbol?.type === 'area' ? p + 1 : p;
+      const rank = symbol?.type === 'area' || symbol?.type === 'polygon' ? p + 1 : p;
       if (ring === 0) {
         out.push(makeCandidate(box, rank, position, 0, textAnchor, baseline, null));
         continue;
@@ -125,5 +159,5 @@ export function buildCandidates(label: LabelInput, s: CandidateSettings): Candid
       out.push(makeCandidate(box, cost, position, ring, textAnchor, baseline, leader));
     }
   }
-  return out.sort((a, b) => a.cost - b.cost);
+  return out;
 }
