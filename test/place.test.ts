@@ -326,10 +326,11 @@ describe('placeLabels', () => {
 
   it('stacks the labels of a dense cluster in a column, in the order of their anchors', () => {
     const rnd = mulberry32(7);
-    const cluster: LabelInput[] = Array.from({ length: 9 }, (_, i) => ({
+    // Too dense for every name to fit next to its symbol.
+    const cluster: LabelInput[] = Array.from({ length: 14 }, (_, i) => ({
       id: i,
-      x: 200 + (rnd() - 0.5) * 40,
-      y: 150 + (rnd() - 0.5) * 40,
+      x: 200 + (rnd() - 0.5) * 30,
+      y: 150 + (rnd() - 0.5) * 30,
       width: 40 + rnd() * 20,
       height: 11,
       symbol: { type: 'circle', radius: 3 + rnd() * 5 },
@@ -348,7 +349,7 @@ describe('placeLabels', () => {
     }
     const shown = visible(r.labels);
     for (let a = 0; a < shown.length; a++) for (let b = a + 1; b < shown.length; b++) expect(overlaps(shown[a].box!, shown[b].box!)).toBe(false);
-    expect(r.stats.placed).toBeGreaterThanOrEqual(placeLabels(cluster, { ...options, align: 'none' }).stats.placed);
+    expect(r.stats.placed).toBeGreaterThan(placeLabels(cluster, { ...options, align: 'none' }).stats.placed);
   });
 
   it('sets callouts in a column along the edge, with orthogonal leaders that do not cross', () => {

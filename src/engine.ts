@@ -605,20 +605,23 @@ export class Placer {
   }
 
   /**
-   * Set the group in a column beside it, at the distance that keeps the most labels; a label
-   * that does not fit keeps its place. Returns whether a column of two labels or more was set.
+   * Set the group in a column beside it, at the distance that keeps the most labels, when that
+   * shows hidden labels or tidies two leaders or more; a label that does not fit keeps its
+   * place. Returns whether a column was set.
    */
   private column(group: number[], side: 1 | -1): boolean {
     const s = this.settings;
     const edges = group.map((i) => this.labels[i].x + side * symbolExtent(this.labels[i].symbol, side, 0, [this.labels[i].x, this.labels[i].y]));
     const start = (side > 0 ? Math.max(...edges) : Math.min(...edges)) + side * (s.gap + s.rings[0]);
-    // Each step farther must keep more labels: a quarter of a label per label height.
+    // Worth it only to show hidden labels, or to tidy labels that already needed a leader;
+    // each step farther must keep more labels, a quarter of a label per label height.
+    const worth = (kept: number[]) => kept.some((i) => !this.current[i]) || kept.filter((i) => this.current[i]!.ring > 0).length > 1;
     let best: { at: number; kept: number[]; score: number } | null = null;
     for (let attempt = 0; attempt < COLUMN_TRIES; attempt++) {
       const at = start + side * attempt * this.unit;
       const kept = this.fitColumn(group, side, at, false);
       const score = (kept?.length ?? 0) - attempt / 4;
-      if (kept && (!best || score > best.score)) best = { at, kept, score };
+      if (kept && worth(kept) && (!best || score > best.score)) best = { at, kept, score };
     }
     return best !== null && this.fitColumn(best.kept, side, best.at, true) !== null;
   }
