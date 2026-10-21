@@ -22,4 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `layouts`: other measured layouts of a label (two lines...), tried at a small extra cost
 - `polygon` symbols: labels wholly inside their polygon, or wholly outside it and out of the others
 - `line` obstacles (coastlines, borders): they keep label boxes off, not leaders
+- `align: 'columns'`: labels of dense clusters stacked in columns beside them, in the order of their anchors
+- `callout`: labels set in columns along the left or right edge, with orthogonal leaders
 - Benchmark on French communes

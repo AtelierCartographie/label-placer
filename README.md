@@ -5,6 +5,7 @@ Automatic label placement for **maps** and **charts**, independent of the render
 - Ordered candidate positions around point symbols (by default the sides first, right, above, left, below, then the corners), inside a symbol when the label fits, centered on areas.
 - Polygons: a label goes wholly inside its polygon, or wholly outside, never across its outline.
 - Several layouts per label (one line, two lines...): the engine picks the one that fits.
+- Aligned labels: dense clusters in columns beside them, callouts in columns along the edge of the map.
 - No ambiguity: a label avoids spots as close to another symbol as to its own.
 - Priorities and a hierarchy of modes: `pinned` (placed by hand), `required` (never hidden), `optional`.
 - Obstacles: other symbols, legend, title, any rectangle or circle, lines such as coastlines, with hard and soft costs.
@@ -92,6 +93,14 @@ Breaking and measuring text needs the fonts, so it stays with the caller. The ca
 - Across the outline, a candidate is discarded: a label of a coastal département sits on land or at sea, never on the coastline.
 - Outside its polygon, a label next to it must not land in, or across, another label's polygon. With a leader it may, at the ambiguity cost: the leader names its feature (small areas, such as the départements around Paris).
 
+### Columns
+
+`align: 'columns'` brings order to dense clusters: after the optimizer, the labels of each cluster (three named anchors or more, within 4 label heights of one another, split again when more than ten) are stacked in a column beside it, flushed against a common edge, in the order of their anchors so that their leaders do not cross. The whole cluster goes on the right if it can, else on the left, else split at its median between both sides, else only the labels that already needed a leader. The column steps away from the cluster, one label height at a time, until its boxes are clear; leaders may cross the cluster's symbols. A label that does not fit keeps its place, and hidden labels of the cluster join when they fit, so a column often shows more names. Labels inside their symbol, pinned, sticky or forced labels stay where they are. `placement` is `column`.
+
+### Callouts
+
+`callout: true` (or `'left'`, `'right'`) sets a label in a column along the left or right edge of the bounds, the nearer one by default: boundary labeling, for a few chosen labels, often on several lines (give their measured size). Callouts are stacked in the order of their anchors, as close to their height as the others allow, and joined to their symbol by an orthogonal leader, horizontal from the label then vertical; neighbours whose leaders would cross are swapped. They are placed first and never moved, like pinned labels, and the others avoid them. `placement` is `margin`.
+
 ### Line obstacles
 
 `{ type: 'line', points, soft? }` (coastline, border, river) keeps label boxes off a line; leaders may cross it. A soft line costs `symbolObstacles.softCost` per label height of line under the box.
@@ -172,7 +181,7 @@ new TextLayer({
 
 ### `placeLabels(labels, options): PlacementResult`
 
-`LabelInput`: `id?`, `x`, `y`, `width`, `height` (both 0 for a symbol without a label), `layouts?` (`[{ width, height, cost? }]`), `symbol?` (`{ type: 'circle', radius }`, `{ type: 'rect', width, height }`, `{ type: 'area', inscribedRadius }` or `{ type: 'polygon', rings }`), `priority?`, `mode?`, `offset?` (pinned), `leader?` (default true).
+`LabelInput`: `id?`, `x`, `y`, `width`, `height` (both 0 for a symbol without a label), `layouts?` (`[{ width, height, cost? }]`), `symbol?` (`{ type: 'circle', radius }`, `{ type: 'rect', width, height }`, `{ type: 'area', inscribedRadius }` or `{ type: 'polygon', rings }`), `priority?`, `mode?`, `offset?` (pinned), `leader?` (default true), `callout?` (`true`, `'left'` or `'right'`).
 
 `PlaceOptions`:
 
@@ -189,6 +198,7 @@ new TextLayer({
 | `areaOverflowCost` | `6`                                              | cost of a centered area label twice too large for its area         |
 | `resolution`       | about 10 cells per h                             | raster cells per unit for static obstacles                         |
 | `optimize`         | `'chain'`                                        | `'none'` keeps the greedy result                                   |
+| `align`            | `'none'`                                         | `'columns'` stacks dense clusters in columns                       |
 | `budget`           | `{ work: 40 × labels }`                          | optimizer budget                                                   |
 | `previous`         | none                                             | earlier result, matched by `id` (else index)                       |
 
@@ -207,8 +217,9 @@ Costs are in position-rank units: the n-th preferred position costs n.
 3. **Greedy pass**: by mode then priority, each label takes its first free candidate. Placed labels and their leaders go in a uniform grid.
 4. **Ejection chains**: a hidden label takes a candidate if the one or two labels in its way can move to free spots, directly or by pushing one more label. A label that cannot move is hidden only if it ranks lower.
 5. **Polish**: each label moves to its best-ranked free candidate.
+6. **Columns** (with `align: 'columns'`): dense clusters are stacked in columns, positions solved by isotonic regression (pool adjacent violators) around the anchors' heights. Callouts use the same stacking along the edges, before the greedy pass.
 
-Inspirations, none of whose code is reused: Imhof's position preferences, reordered after the Atelier's practice; Christensen, Marks & Shieber (1995) on point-feature label placement; the FALP and ejection-chain search of QGIS's PAL; MapLibre's sticky anchors and grid index; vega-label's occupancy bitmap; d3-annotation's connectors; Philippe Rivière's *Automated label placement (France)* notebook.
+Inspirations, none of whose code is reused: Imhof's position preferences, reordered after the Atelier's practice; Christensen, Marks & Shieber (1995) on point-feature label placement; the FALP and ejection-chain search of QGIS's PAL; MapLibre's sticky anchors and grid index; vega-label's occupancy bitmap; d3-annotation's connectors; Philippe Rivière's *Automated label placement (France)* notebook; Bekos, Kaufmann, Symvonis & Wolff (2007) on boundary labeling; the excentric and aligned callouts of the Atelier's maps.
 
 ## Benchmark
 
@@ -231,8 +242,7 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 
 ## Roadmap
 
-- Aligned labels: the labels of a dense cluster that need leaders, stacked in a column beside it in the order of their anchors, so that leaders never cross.
-- Boundary labeling: chosen labels (callouts on several lines) in columns along the edge of the map, with orthogonal leaders.
+- Callouts along the top and bottom edges, and an exact boundary labeling (minimal total leader length without crossings).
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.
 - A demo page rendering the same placement with SVG, Canvas and deck.gl.

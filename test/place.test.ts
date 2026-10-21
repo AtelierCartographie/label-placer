@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_POSITIONS, placeLabels } from '../src/index.ts';
+import { segmentsCross } from '../src/geometry.ts';
 import type { Box, LabelInput, PlacedLabel, PlaceOptions, Point } from '../src/index.ts';
 
 function mulberry32(seed: number) {
@@ -321,6 +322,60 @@ describe('placeLabels', () => {
     const r = placeLabels([label], { ...base, positions: ['right'], leader: { rings: [10] }, obstacles: coast(108) }).labels[0];
     expect(r.ring).toBe(1);
     expect(r.overlapping).toBe(false);
+  });
+
+  it('stacks the labels of a dense cluster in a column, in the order of their anchors', () => {
+    const rnd = mulberry32(7);
+    const cluster: LabelInput[] = Array.from({ length: 9 }, (_, i) => ({
+      id: i,
+      x: 200 + (rnd() - 0.5) * 40,
+      y: 150 + (rnd() - 0.5) * 40,
+      width: 40 + rnd() * 20,
+      height: 11,
+      symbol: { type: 'circle', radius: 3 + rnd() * 5 },
+      priority: 10 - i
+    }));
+    const options: PlaceOptions = { bounds: [0, 0, 400, 300], align: 'columns' };
+    const r = placeLabels(cluster, options);
+    const column = r.labels.filter((l) => l.placement === 'column');
+    expect(column.length).toBeGreaterThanOrEqual(3);
+    for (const side of ['start', 'end'] as const) {
+      const same = column.filter((l) => l.textAnchor === side).sort((a, b) => a.box![1] - b.box![1]);
+      // One flush edge, and the anchors in the same order as the labels.
+      expect(new Set(same.map((l) => (side === 'start' ? l.box![0] : l.box![2]).toFixed(6))).size).toBeLessThanOrEqual(1);
+      const ys = same.map((l) => cluster[l.index].y);
+      expect(ys).toEqual(ys.slice().sort((a, b) => a - b));
+    }
+    const shown = visible(r.labels);
+    for (let a = 0; a < shown.length; a++) for (let b = a + 1; b < shown.length; b++) expect(overlaps(shown[a].box!, shown[b].box!)).toBe(false);
+    expect(r.stats.placed).toBeGreaterThanOrEqual(placeLabels(cluster, { ...options, align: 'none' }).stats.placed);
+  });
+
+  it('sets callouts in a column along the edge, with orthogonal leaders that do not cross', () => {
+    const callouts: LabelInput[] = [
+      { id: 'a', x: 300, y: 60, width: 60, height: 22, symbol: { type: 'circle', radius: 3 }, callout: 'left' },
+      { id: 'b', x: 250, y: 150, width: 80, height: 22, symbol: { type: 'circle', radius: 3 }, callout: 'left' },
+      { id: 'c', x: 320, y: 155, width: 50, height: 22, symbol: { type: 'circle', radius: 3 }, callout: 'left' },
+      { id: 'd', x: 380, y: 250, width: 70, height: 22, symbol: { type: 'circle', radius: 3 }, callout: true }
+    ];
+    const r = placeLabels(callouts, { bounds: [0, 0, 500, 300] });
+    const left = r.labels.slice(0, 3);
+    for (const l of left) {
+      expect([l.placement, l.textAnchor, l.box![2]]).toEqual(['margin', 'end', 80]);
+      // Horizontal from the label, then vertical to the symbol.
+      const [first, ...rest] = l.leader!;
+      expect(rest[rest.length - 1]).toEqual([80, (l.box![1] + l.box![3]) / 2]);
+      // It starts on the symbol's buffer: radius plus symbolGap (a quarter of h = 22).
+      expect(Math.hypot(first[0] - callouts[l.index].x, first[1] - callouts[l.index].y)).toBeCloseTo(3 + 5.5);
+    }
+    expect(r.labels[3].box![0]).toBe(430);
+    for (let a = 0; a < 3; a++)
+      for (let b = a + 1; b < 3; b++) {
+        expect(overlaps(left[a].box!, left[b].box!)).toBe(false);
+        const [p, q] = [left[a].leader!, left[b].leader!];
+        for (let i = 1; i < p.length; i++)
+          for (let j = 1; j < q.length; j++) expect(segmentsCross(...p[i - 1], ...p[i], ...q[j - 1], ...q[j])).toBe(false);
+      }
   });
 
   it('places more labels with ejection chains than greedily, without losing higher ones', () => {

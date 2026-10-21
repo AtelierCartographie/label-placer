@@ -13,8 +13,11 @@ export type Position =
   | 'top'
   | 'bottom';
 
-/** Where a label ended up: around the anchor, inside its symbol, centered on an area, or pinned. */
-export type Placement = Position | 'inside' | 'center' | 'pinned';
+/**
+ * Where a label ended up: around the anchor, inside its symbol, centered on an area, pinned,
+ * in a `column` beside its cluster (`align: 'columns'`), or in the `margin` (a callout).
+ */
+export type Placement = Position | 'inside' | 'center' | 'pinned' | 'column' | 'margin';
 
 /** The mark drawn at the anchor. Candidates are laid out around it and leaders start on its edge. */
 export type LabelSymbol =
@@ -59,6 +62,11 @@ export interface LabelInput {
   offset?: Point;
   /** Whether this label may be moved away with a leader line. Defaults to true. */
   leader?: boolean;
+  /**
+   * A callout: set in a column along the left or right edge of the bounds (the nearer one, or
+   * the one given), with an orthogonal leader. Placed first and never moved, like a pinned label.
+   */
+  callout?: boolean | 'left' | 'right';
 }
 
 /**
@@ -130,6 +138,11 @@ export interface PlaceOptions {
   areaOverflowCost?: number;
   /** Raster cells per unit for static obstacles. Defaults to about ten cells per label height. */
   resolution?: number;
+  /**
+   * `columns`: the labels of a cluster that ended with a leader on the same side are stacked in
+   * a column beside it, in the order of their anchors, with hidden ones joining when they fit.
+   */
+  align?: 'none' | 'columns';
   /** `chain` runs ejection chains after the greedy pass. Defaults to `chain`. */
   optimize?: 'none' | 'chain';
   budget?: Budget;

@@ -2,7 +2,7 @@ import { buildCandidates, DEFAULT_POSITIONS, makeCandidate, type Candidate, type
 import { boxesOverlap, segmentHitsBox, segmentsCross } from './geometry.ts';
 import { Features } from './features.ts';
 import { Grid } from './grid.ts';
-import { flushAlignment, leaderGeometry } from './leader.ts';
+import { flushAlignment, leaderGeometry, symbolExtent } from './leader.ts';
 import { ObstacleRaster } from './obstacles.ts';
 import { boxRelation, boxRingsDistance, ringsBox } from './polygon.ts';
 import type { Box, LabelInput, LabelMode, PlaceOptions, PlacedLabel, PlacementResult, Point } from './types.ts';
@@ -11,6 +11,13 @@ const MODE_RANK: Record<LabelMode, number> = { pinned: 0, required: 1, optional:
 const MAX_RASTER_CELLS = 4_000_000;
 const CHAIN_MAX_EJECT = 2;
 const CHAIN_DEPTH = 1;
+/** Named anchors closer than this many label heights belong to the same cluster when aligning. */
+const ALIGN_REACH = 4;
+/** Labels a cluster needs to be set in columns, and at most in one column. */
+const ALIGN_MIN = 3;
+const ALIGN_MAX = 10;
+/** Steps of one label height away from the cluster tried for its column. */
+const COLUMN_TRIES = 10;
 
 function median(values: number[]): number {
   if (values.length === 0) return 1;
@@ -73,6 +80,13 @@ export class Placer {
   private readonly resolved: Uint8Array;
   private readonly polygons: Grid;
   private readonly polygonBoxes: Box[] = [];
+  private readonly settings: CandidateSettings;
+  private readonly unit: number;
+  private readonly raster: ObstacleRaster;
+  private readonly resolution: number;
+  private readonly hardRects: Box[] = [];
+  private readonly hardMin: number;
+  private readonly softCost: number;
   work = 0;
 
   constructor(labels: LabelInput[], options: PlaceOptions) {
@@ -86,7 +100,7 @@ export class Placer {
     this.grid = new Grid(bx0, by0, bx1, by1, unit * 2);
 
     const leader = options.leader === false ? null : (options.leader ?? {});
-    const settings: CandidateSettings = {
+    const settings: CandidateSettings = (this.settings = {
       positions: options.positions ?? DEFAULT_POSITIONS,
       gap: options.gap ?? 0.2 * unit,
       inside: options.inside ?? true,
@@ -98,13 +112,15 @@ export class Placer {
       leaderLengthCost: leader?.lengthCost ?? 2,
       areaOverflowCost: options.areaOverflowCost ?? 6,
       unit
-    };
+    });
+    this.unit = unit;
 
     const area = Math.max(1e-9, (bx1 - bx0) * (by1 - by0));
     const resolution = options.resolution ?? Math.min(10 / unit, Math.sqrt(MAX_RASTER_CELLS / area));
-    const raster = new ObstacleRaster(options.bounds, resolution);
-    const hardMin = options.symbolObstacles?.hardMinRadius ?? 0.25 * unit;
-    const softCost = options.symbolObstacles?.softCost ?? 6;
+    const raster = (this.raster = new ObstacleRaster(options.bounds, resolution));
+    this.resolution = resolution;
+    const hardMin = (this.hardMin = options.symbolObstacles?.hardMinRadius ?? 0.25 * unit);
+    this.softCost = options.symbolObstacles?.softCost ?? 6;
     const minObstacle = 0.5 / resolution;
     for (const l of labels) {
       if (l.symbol?.type === 'circle' && l.symbol.radius > 0)
@@ -114,7 +130,7 @@ export class Placer {
         raster.addRect([l.x - w / 2, l.y - h / 2, l.x + w / 2, l.y + h / 2], Math.max(w, h) / 2 < hardMin);
       }
     }
-    const hardRects: Box[] = [];
+    const hardRects = this.hardRects;
     for (const o of options.obstacles ?? []) {
       if (o.type === 'circle') raster.addCircle(o.x, o.y, o.radius, o.soft ?? false);
       else if (o.type === 'line') raster.addLine(o.points, o.soft ?? false);
@@ -145,6 +161,13 @@ export class Placer {
         this.blocked.push([]);
         continue;
       }
+      if (l.callout) {
+        // Set once every callout is known, below.
+        this.feasible.push([]);
+        this.farther.push([]);
+        this.blocked.push([]);
+        continue;
+      }
       if (l.mode === 'pinned') {
         const [ox, oy] = l.offset ?? [0, 0];
         const cx = l.x + ox;
@@ -158,40 +181,11 @@ export class Placer {
         this.blocked.push([]);
         continue;
       }
-      const ownHard = this.ownHardCoverage(l, hardMin);
       const rings = l.mode === 'required' && settings.rings.length ? [...settings.rings, Math.max(...settings.rings) + unit] : settings.rings;
       const ok: Candidate[] = [];
       const far: Candidate[] = [];
       const ko: Candidate[] = [];
-      for (const c of buildCandidates(l, { ...settings, rings })) {
-        const box: Box = [c.x0, c.y0, c.x1, c.y1];
-        const outside = c.bx0 < bx0 || c.by0 < by0 || c.bx1 > bx1 || c.by1 > by1;
-        const own = c.placement === 'inside' && ownHard ? raster.cellCount(box) : 0;
-        const coverage = raster.hardCoverage(box) - own;
-        const lines = raster.lineCoverage(box);
-        // Wholly inside its polygon (the inside candidates are), or wholly outside, and then, unless
-        // a leader names it, out of the other polygons.
-        const astride =
-          l.symbol?.type === 'polygon' &&
-          c.placement !== 'center' &&
-          (boxRelation(box, l.symbol.rings, this.polygonBoxes[i]) !== 'outside' || (c.ring === 0 && this.inOtherPolygon(i, box)));
-        let crossed = 0;
-        let softCrossed = 0;
-        for (let k = 1; k < (c.leader?.length ?? 0); k++) {
-          crossed += raster.coveredLength(...c.leader![k - 1], ...c.leader![k]);
-          softCrossed += raster.coveredLength(...c.leader![k - 1], ...c.leader![k], true);
-        }
-        const hit = hardRects.some((r) => boxesOverlap(c.x0, c.y0, c.x1, c.y1, r[0], r[1], r[2], r[3])) || coverage > 0 || crossed > 0 || lines > 0 || astride;
-        // A leader over a symbol, or a soft line under a box, counts as a strip one label height wide.
-        if (softCost > 0) c.cost += (softCost * (raster.softArea(box) + (softCrossed + raster.softLineLength(box)) * unit)) / (unit * unit);
-        // A leader names its polygon, but the label is still better out of the others.
-        if (l.symbol?.type === 'polygon' && c.ring > 0 && this.inOtherPolygon(i, box)) c.cost += this.ambiguityCost;
-        if (outside || hit) {
-          const area = (c.x1 - c.x0) * (c.y1 - c.y0);
-          c.hard = (coverage + lines) / (resolution * resolution) + crossed * unit + areaOutside(box, options.bounds) + (astride ? area / 2 : 0);
-          ko.push(c);
-        } else (c.ring > settings.rings.length ? far : ok).push(c);
-      }
+      for (const c of buildCandidates(l, { ...settings, rings })) (this.classify(i, c) ? ko : c.ring > settings.rings.length ? far : ok).push(c);
       ok.sort((a, b) => a.cost - b.cost);
       far.sort((a, b) => a.cost - b.cost);
       this.feasible.push(ok);
@@ -199,14 +193,155 @@ export class Placer {
       this.blocked.push(ko);
     }
 
+    this.placeCallouts();
+
+    const rank = (i: number) => (labels[i].callout ? 0 : MODE_RANK[labels[i].mode ?? 'optional']);
     this.order = labels
       .map((_, i) => i)
       .sort(
         (a, b) =>
-          MODE_RANK[labels[a].mode ?? 'optional'] - MODE_RANK[labels[b].mode ?? 'optional'] ||
+          rank(a) - rank(b) ||
           (labels[b].priority ?? 0) - (labels[a].priority ?? 0) ||
           a - b
       );
+  }
+
+  /**
+   * Check a candidate against the static obstacles and the bounds, and add their soft costs.
+   * Returns whether it is blocked; a blocked candidate gets its hard coverage in `c.hard`. With
+   * `leaderOverSymbols`, a leader across a hard symbol only pays, like across a soft one.
+   */
+  private classify(i: number, c: Candidate, leaderOverSymbols = false): boolean {
+    const { raster, unit, softCost } = this;
+    const l = this.labels[i];
+    const [bx0, by0, bx1, by1] = this.bounds;
+    const box: Box = [c.x0, c.y0, c.x1, c.y1];
+    const outside = c.bx0 < bx0 || c.by0 < by0 || c.bx1 > bx1 || c.by1 > by1;
+    const own = c.placement === 'inside' && this.ownHardCoverage(l, this.hardMin) ? raster.cellCount(box) : 0;
+    const coverage = raster.hardCoverage(box) - own;
+    const lines = raster.lineCoverage(box);
+    // Wholly inside its polygon (the inside candidates are), or wholly outside, and then, unless
+    // a leader names it, out of the other polygons.
+    const astride =
+      l.symbol?.type === 'polygon' &&
+      c.placement !== 'center' &&
+      (boxRelation(box, l.symbol.rings, this.polygonBoxes[i]) !== 'outside' || (c.ring === 0 && this.inOtherPolygon(i, box)));
+    let crossed = 0;
+    let softCrossed = 0;
+    for (let k = 1; k < (c.leader?.length ?? 0); k++) {
+      crossed += raster.coveredLength(...c.leader![k - 1], ...c.leader![k]);
+      softCrossed += raster.coveredLength(...c.leader![k - 1], ...c.leader![k], true);
+    }
+    const hit =
+      this.hardRects.some((r) => boxesOverlap(c.x0, c.y0, c.x1, c.y1, r[0], r[1], r[2], r[3])) || coverage > 0 || (crossed > 0 && !leaderOverSymbols) || lines > 0 || astride;
+    // A leader over a symbol, or a soft line under a box, counts as a strip one label height wide.
+    const over = leaderOverSymbols ? crossed : 0;
+    if (softCost > 0) c.cost += (softCost * (raster.softArea(box) + (softCrossed + over + raster.softLineLength(box)) * unit)) / (unit * unit);
+    // A leader names its polygon, but the label is still better out of the others.
+    if (l.symbol?.type === 'polygon' && c.ring > 0 && this.inOtherPolygon(i, box)) c.cost += this.ambiguityCost;
+    if (!outside && !hit) return false;
+    const area = (c.x1 - c.x0) * (c.y1 - c.y0);
+    c.hard = (coverage + lines) / (this.resolution * this.resolution) + crossed * unit + areaOutside(box, this.bounds) + (astride ? area / 2 : 0);
+    return true;
+  }
+
+  /**
+   * Callouts go in a column along the left or right edge of the bounds, in the order of their
+   * anchors as far as their leaders allow: a horizontal leg from the label, then a vertical one
+   * to the symbol (boundary labeling).
+   */
+  private placeCallouts(): void {
+    const s = this.settings;
+    const [bx0, by0, bx1, by1] = this.bounds;
+    const callouts = this.labels.map((_, i) => i).filter((i) => this.labels[i].callout && this.labels[i].width > 0 && this.labels[i].height > 0);
+    for (const side of [-1, 1] as const) {
+      const group = callouts.filter((i) => {
+        const c = this.labels[i].callout;
+        return c === 'left' ? side < 0 : c === 'right' ? side > 0 : (this.labels[i].x < (bx0 + bx1) / 2) === side < 0;
+      });
+      if (!group.length) continue;
+      const width = Math.max(...group.map((i) => this.labels[i].width));
+      const column = side < 0 ? bx0 + width : bx1 - width;
+      let order = group.slice().sort((a, b) => this.labels[a].y - this.labels[b].y || a - b);
+      let cands = this.stack(order, side, column, s.gap, [by0, by1], 'margin', (i, box) => this.calloutLeader(i, box, side));
+      // Swap neighbours whose leaders cross, as long as that helps.
+      for (let pass = 0; pass < order.length; pass++) {
+        let swapped = false;
+        for (let k = 1; k < order.length; k++) {
+          if (!candidatesConflict(cands[k - 1], cands[k])) continue;
+          const next = order.slice();
+          [next[k - 1], next[k]] = [next[k], next[k - 1]];
+          const tried = this.stack(next, side, column, s.gap, [by0, by1], 'margin', (i, box) => this.calloutLeader(i, box, side));
+          if (candidatesConflict(tried[k - 1], tried[k])) continue;
+          [order, cands, swapped] = [next, tried, true];
+        }
+        if (!swapped) break;
+      }
+      order.forEach((i, k) => (this.feasible[i] = [cands[k]]));
+    }
+  }
+
+  /**
+   * Candidates for labels stacked in a column, in this order, each as close to the height of
+   * its anchor as the others allow (isotonic regression), flushed against `column`: right of
+   * it when `side` is 1, left of it when -1.
+   */
+  private stack(
+    order: number[],
+    side: 1 | -1,
+    column: number,
+    gap: number,
+    [top, bottom]: [number, number],
+    placement: 'column' | 'margin',
+    leader: (i: number, box: Box) => Point[] | null,
+    sizes?: [number, number][]
+  ): Candidate[] {
+    const size = (k: number) => sizes?.[k] ?? [this.labels[order[k]].width, this.labels[order[k]].height];
+    const n = order.length;
+    // Offsets that keep the boxes apart, then pool adjacent violators on the shifted targets.
+    const offset = new Array<number>(n).fill(0);
+    for (let k = 1; k < n; k++) offset[k] = offset[k - 1] + (size(k - 1)[1] + size(k)[1]) / 2 + gap;
+    const blocks: { sum: number; count: number }[] = [];
+    for (let k = 0; k < n; k++) {
+      blocks.push({ sum: this.labels[order[k]].y - offset[k], count: 1 });
+      while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].count > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].count) {
+        const b = blocks.pop()!;
+        blocks[blocks.length - 1].sum += b.sum;
+        blocks[blocks.length - 1].count += b.count;
+      }
+    }
+    const ys: number[] = [];
+    for (const b of blocks) for (let k = 0; k < b.count; k++) ys.push(b.sum / b.count + offset[ys.length]);
+    // Keep the column within the bounds.
+    const low = ys[0] - size(0)[1] / 2 - top;
+    const high = ys[n - 1] + size(n - 1)[1] / 2 - bottom;
+    const shift = low < 0 ? -low : high > 0 ? -Math.min(high, low) : 0;
+    return order.map((i, k) => {
+      const [w, h] = size(k);
+      const y = ys[k] + shift;
+      const box: Box = side > 0 ? [column, y - h / 2, column + w, y + h / 2] : [column - w, y - h / 2, column, y + h / 2];
+      const lead = leader(i, box);
+      let length = 0;
+      for (let p = 1; p < (lead?.length ?? 0); p++) length += Math.hypot(lead![p][0] - lead![p - 1][0], lead![p][1] - lead![p - 1][1]);
+      const c = makeCandidate(box, this.settings.leaderBaseCost + (this.settings.leaderLengthCost * length) / this.unit, placement, 1, side > 0 ? 'start' : 'end', 'middle', lead);
+      return c;
+    });
+  }
+
+  /** Orthogonal leader of a callout: horizontal from the label, then vertical to the symbol. */
+  private calloutLeader(i: number, box: Box, side: 1 | -1): Point[] | null {
+    const l = this.labels[i];
+    const { symbolGap } = this.settings;
+    const buffered = (e: number) => (e > 0 ? e + symbolGap : 0);
+    const py = (box[1] + box[3]) / 2;
+    const px = side < 0 ? box[2] : box[0];
+    const dy = py - l.y;
+    // Towards the label, the row may meet the symbol straight away.
+    const e = buffered(symbolExtent(l.symbol, side, 0, [l.x, l.y]));
+    if (Math.abs(dy) < e) return [[l.x + side * Math.sqrt(e * e - dy * dy), py], [px, py]];
+    if (Math.abs(px - l.x) < 1e-9) return [[l.x, l.y + Math.sign(dy) * buffered(symbolExtent(l.symbol, 0, Math.sign(dy), [l.x, l.y]))], [px, py]];
+    const start: Point = [l.x, l.y + Math.sign(dy) * buffered(symbolExtent(l.symbol, 0, Math.sign(dy), [l.x, l.y]))];
+    return [start, [l.x, py], [px, py]];
   }
 
   private ownHardCoverage(l: LabelInput, hardMin: number): boolean {
@@ -219,7 +354,7 @@ export class Placer {
     if (!this.features || this.resolved[i]) return list;
     this.resolved[i] = 1;
     const symbol = this.labels[i].symbol;
-    if (symbol?.type === 'area' || this.mode(i) === 'pinned') return list;
+    if (symbol?.type === 'area' || this.fixed(i)) return list;
     for (const c of list) {
       if (c.ring > 0 || c.placement === 'inside' || c.placement === 'center') continue;
       const box: Box = [c.x0, c.y0, c.x1, c.y1];
@@ -244,6 +379,11 @@ export class Placer {
 
   private priority(i: number): number {
     return this.labels[i].priority ?? 0;
+  }
+
+  /** Pinned labels and callouts: placed first, where they were put, never moved. */
+  private fixed(i: number): boolean {
+    return this.mode(i) === 'pinned' || !!this.labels[i].callout;
   }
 
   private mode(i: number): LabelMode {
@@ -273,7 +413,7 @@ export class Placer {
 
   /** Pinned, forced and sticky labels stay where they are while chains run. */
   private isMovable(i: number): boolean {
-    return this.mode(i) !== 'pinned' && !this.forced.has(i) && !this.sticky.has(i);
+    return !this.fixed(i) && !this.forced.has(i) && !this.sticky.has(i);
   }
 
   private isFree(i: number, c: Candidate): boolean {
@@ -301,7 +441,7 @@ export class Placer {
     this.previous = previous;
     for (const i of this.order) {
       const list = this.feasible[i];
-      if (this.mode(i) === 'pinned') {
+      if (this.fixed(i)) {
         if (list.length) this.place(i, list[0]);
         continue;
       }
@@ -355,7 +495,7 @@ export class Placer {
       improved = false;
       for (const i of this.order) {
         if (stop()) return;
-        if (this.current[i] || this.mode(i) !== 'optional') continue;
+        if (this.current[i] || this.mode(i) !== 'optional' || this.fixed(i)) continue;
         for (const c of this.resolve(i)) {
           if (stop()) return;
           const blockers = this.conflicts(i, c, CHAIN_MAX_EJECT + 1);
@@ -413,11 +553,128 @@ export class Placer {
     return false;
   }
 
+  /**
+   * Stack the labels of each dense cluster in columns beside it, in the order of their anchors,
+   * so that their leaders do not cross: the whole cluster on the right, else on the left, else
+   * split at its median between both sides, else only the labels that already needed a leader.
+   * Hidden labels of the cluster join when they fit; a label that fits nowhere keeps its place.
+   */
+  align(): void {
+    const s = this.settings;
+    if (!s.rings.length) return;
+    const near = (a: number, b: number) => Math.hypot(this.labels[a].x - this.labels[b].x, this.labels[a].y - this.labels[b].y) <= ALIGN_REACH * this.unit;
+    const named = this.order.filter((i) => this.labels[i].width > 0 && this.labels[i].height > 0);
+    // A cluster too large for one column is split again with a shorter reach.
+    const split = (group: number[], reach: number): number[][] =>
+      group.length <= ALIGN_MAX || reach < this.unit
+        ? [group]
+        : this.clusters(group, (a, b) => Math.hypot(this.labels[a].x - this.labels[b].x, this.labels[a].y - this.labels[b].y) <= reach).flatMap((g) => split(g, reach * 0.7));
+    for (const cluster of this.clusters(named, near).flatMap((g) => split(g, ALIGN_REACH * this.unit * 0.7))) {
+      if (cluster.length < ALIGN_MIN) continue;
+      // Callouts, pinned, forced, sticky and inside labels stay; so do labels without leaders.
+      const members = cluster.filter((i) => {
+        const c = this.current[i];
+        return this.labels[i].leader !== false && (c ? this.isMovable(i) && c.placement !== 'inside' && c.placement !== 'center' : this.mode(i) === 'optional');
+      });
+      if (members.length < 2) continue;
+      if (this.column(members, 1) || this.column(members, -1)) continue;
+      const xs = members.map((i) => this.labels[i].x).sort((a, b) => a - b);
+      const mid = xs[xs.length >> 1];
+      const east = members.filter((i) => this.labels[i].x >= mid);
+      const west = members.filter((i) => this.labels[i].x < mid);
+      const halves = [east.length > 1 && this.column(east, 1), west.length > 1 && this.column(west, -1)];
+      if (halves.some(Boolean)) continue;
+      for (const side of [1, -1] as const) {
+        const led = members.filter((i) => {
+          const c = this.current[i];
+          return c && c.ring > 0 && ((c.x0 + c.x1) / 2 >= this.labels[i].x ? 1 : -1) === side;
+        });
+        if (led.length > 1) this.column(led, side);
+      }
+    }
+  }
+
+  /** Groups of labels linked by `near`, each in the order given. */
+  private clusters(members: number[], near: (a: number, b: number) => boolean): number[][] {
+    const root = members.map((_, k) => k);
+    const find = (k: number): number => (root[k] === k ? k : (root[k] = find(root[k])));
+    for (let a = 0; a < members.length; a++) for (let b = a + 1; b < members.length; b++) if (near(members[a], members[b])) root[find(a)] = find(b);
+    const groups = new Map<number, number[]>();
+    members.forEach((i, k) => groups.set(find(k), [...(groups.get(find(k)) ?? []), i]));
+    return [...groups.values()];
+  }
+
+  /**
+   * Set the group in a column beside it, at the distance that keeps the most labels; a label
+   * that does not fit keeps its place. Returns whether a column of two labels or more was set.
+   */
+  private column(group: number[], side: 1 | -1): boolean {
+    const s = this.settings;
+    const edges = group.map((i) => this.labels[i].x + side * symbolExtent(this.labels[i].symbol, side, 0, [this.labels[i].x, this.labels[i].y]));
+    const start = (side > 0 ? Math.max(...edges) : Math.min(...edges)) + side * (s.gap + s.rings[0]);
+    // Each step farther must keep more labels: a quarter of a label per label height.
+    let best: { at: number; kept: number[]; score: number } | null = null;
+    for (let attempt = 0; attempt < COLUMN_TRIES; attempt++) {
+      const at = start + side * attempt * this.unit;
+      const kept = this.fitColumn(group, side, at, false);
+      const score = (kept?.length ?? 0) - attempt / 4;
+      if (kept && (!best || score > best.score)) best = { at, kept, score };
+    }
+    return best !== null && this.fitColumn(best.kept, side, best.at, true) !== null;
+  }
+
+  /**
+   * The labels of the group that fit in a column at `at`: the lowest-ranked label in the way
+   * leaves it until the others fit. Placed for good with `commit`, else put back as they were.
+   */
+  private fitColumn(group: number[], side: 1 | -1, at: number, commit: boolean): number[] | null {
+    const s = this.settings;
+    const [, by0, , by1] = this.bounds;
+    const rank = new Map(this.order.map((i, r) => [i, r]));
+    const lowest = (misfits: number[]) => misfits.reduce((a, b) => (rank.get(a)! > rank.get(b)! ? a : b));
+    let members = group.slice();
+    while (members.length > 1) {
+      const order = members.slice().sort((a, b) => this.labels[a].y - this.labels[b].y || a - b);
+      // A label keeps its layout; a hidden one joins in its main one.
+      const sizes = order.map((i): [number, number] => {
+        const c = this.current[i];
+        return c ? [c.x1 - c.x0, c.y1 - c.y0] : [this.labels[i].width, this.labels[i].height];
+      });
+      const cands = this.stack(order, side, at, s.gap, [by0, by1], 'column', (i, box) =>
+        leaderGeometry({ anchor: [this.labels[i].x, this.labels[i].y], symbol: this.labels[i].symbol, box, style: s.leaderStyle, symbolGap: s.symbolGap, minGap: s.minGap }),
+      sizes);
+      cands.forEach((c, k) => (c.layout = this.current[order[k]]?.layout ?? 0));
+      // Leaders out of a dense cluster cross its symbols: only the boxes must be clear.
+      const blocked = order.filter((i, k) => this.classify(i, cands[k], true));
+      if (blocked.length) {
+        members = members.filter((i) => i !== lowest(blocked));
+        continue;
+      }
+      this.journal = new Map();
+      for (const i of order) this.unplace(i);
+      const clashing: number[] = [];
+      order.forEach((i, k) => {
+        if (this.conflicts(i, cands[k], 1).length) clashing.push(i);
+        else this.place(i, cands[k]);
+      });
+      const journal = this.journal;
+      this.journal = null;
+      if (!clashing.length && commit) return members;
+      for (const [t, tc] of journal) {
+        this.unplace(t);
+        if (tc) this.place(t, tc);
+      }
+      if (!clashing.length) return members;
+      members = members.filter((i) => i !== lowest(clashing));
+    }
+    return null;
+  }
+
   /** Move each placed label to its best-ranked free candidate. */
   polish(): void {
     for (const i of this.order) {
       const cur = this.current[i];
-      if (!cur || this.mode(i) === 'pinned' || this.forced.has(i)) continue;
+      if (!cur || this.fixed(i) || this.forced.has(i)) continue;
       if (this.sticky.has(i) && candidateKey(cur) === this.previous?.[i]) continue;
       // A required label on the farther ring takes any free candidate closer in.
       const bound = this.farther[i].includes(cur) ? Infinity : cur.cost;
@@ -467,7 +724,7 @@ export class Placer {
         offset: [x - l.x, y - l.y],
         box: [c.x0, c.y0, c.x1, c.y1],
         leader: c.leader,
-        overlapping: this.forced.has(i) || (this.mode(i) === 'pinned' && this.conflicts(i, c, 1).length > 0) || this.outOfBounds(c)
+        overlapping: this.forced.has(i) || (this.fixed(i) && this.conflicts(i, c, 1).length > 0) || this.outOfBounds(c)
       };
     });
     const placed = labels.filter((l) => l.visible).length;
