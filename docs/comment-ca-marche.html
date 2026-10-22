@@ -316,7 +316,7 @@ footer { border-top: 1px solid var(--rule); padding-block: 1.4rem 0; font-size: 
     <p class="step-tag">Étape 1 · Candidats</p>
     <h2>Les positions candidates</h2>
     <div class="prose">
-      <p>Pour chaque étiquette, le moteur énumère des positions possibles et leur donne un coût. Le classement suit la pratique de l'Atelier de cartographie, qui s'écarte de celui d'Imhof : les côtés d'abord, à droite, au-dessus, à gauche, en dessous, puis les coins, en haut à droite, en haut à gauche, en bas à droite, en bas à gauche. Le coût d'une position est son rang, de 0 à 7.</p>
+      <p>Pour chaque étiquette, le moteur énumère des positions possibles et leur donne un coût. Le classement suit la pratique de l'Atelier de cartographie : les côtés d'abord, à droite, au-dessus, à gauche, en dessous, puis les coins, en haut à droite, en haut à gauche, en bas à droite, en bas à gauche. Le coût d'une position est son rang, de 0 à 7.</p>
       <p>Quand la boîte tient dans le cercle, la position <strong>dans le symbole</strong> passe devant tout le monde (coût −1). Si aucune place n'est libre près du symbole, les mêmes positions sont reprises sur des anneaux plus lointains (par défaut à h et 2h du bord du symbole), reliées par un filet. Leur coût vaut rang + 8 + 2 × longueur du filet / h : un filet passe toujours après une position collée. Une étiquette <code>required</code> sans place libre essaie encore un anneau plus loin, à 3h.</p>
     </div>
     <div class="controls">
@@ -596,16 +596,26 @@ const { labels } = placeLabels(villes.map((v) =&gt; ({
 for (const l of labels) if (l.visible) dessiner(l.x, l.y, l.textAnchor, l.baseline, l.leader);</code></pre>
     <div class="prose">
       <p>Dépôt (privé) : <a href="https://github.com/AtelierCartographie/label-placer">github.com/AtelierCartographie/label-placer</a>. Le README détaille toutes les options et des exemples de rendu SVG, Canvas, deck.gl et MapLibre.</p>
-      <h3>Inspirations</h3>
-      <p>Aucun code n'a été repris ; les idées viennent de :</p>
+      <h3>Une démarche de cartographe</h3>
+      <p>La plupart des outils de placement automatique cherchent à afficher le plus d'étiquettes possible. Ce paquet vise autre chose : un rendu propre, prêt à diffuser ou à imprimer, tel que le composerait un cartographe ou un graphiste. Ses règles viennent d'abord de la <strong>pratique empirique de l'Atelier de cartographie de Sciences Po</strong>, relevée sur ses cartes publiées et éprouvée ici, figure après figure :</p>
       <ul class="refs">
-        <li>Eduard Imhof, l'ordre de préférence des positions autour d'un point, réordonné ici d'après la pratique de l'Atelier.</li>
+        <li>l'ordre des positions autour d'un symbole, dedans quand le nom y tient, puis à droite, au-dessus, à gauche, en dessous, et les coins en dernier ;</li>
+        <li>des filets octilinéaires ou orthogonaux, qui partent à distance du symbole et n'apparaissent que si le nom ne se lit plus comme attaché ;</li>
+        <li>des colonnes de noms alignés au bord des amas denses, dans l'ordre de leurs points, et des encadrés en marge, sur plusieurs lignes ;</li>
+        <li>des noms de surface entièrement dedans ou franchement dehors, jamais à cheval sur un trait de côte ou une frontière ;</li>
+        <li>l'ambiguïté évitée : un nom ne doit pas se lire comme celui d'un symbole voisin ;</li>
+        <li>et surtout, nommer moins : la hiérarchie décide des noms à garder, et une carte nette en montre souvent bien moins que tout.</li>
+      </ul>
+      <h3>Inspirations</h3>
+      <p>Aucun code n'a été repris ; les idées algorithmiques viennent de :</p>
+      <ul class="refs">
         <li>Christensen, Marks et Shieber (1995), sur le placement d'étiquettes de points.</li>
         <li>PAL dans QGIS : la recherche FALP et les chaînes d'éjection.</li>
         <li>MapLibre : les ancres collantes et l'index en grille.</li>
         <li>vega-label : la carte d'occupation en bitmap.</li>
         <li>d3-annotation : les connecteurs.</li>
         <li>Philippe Rivière, le carnet Observable <em>Automated label placement (France)</em>.</li>
+        <li>Bekos, Kaufmann, Symvonis et Wolff (2007), sur l'étiquetage en marge (<em>boundary labeling</em>).</li>
       </ul>
     </div>
   </div>

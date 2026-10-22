@@ -221,7 +221,11 @@ Costs are in position-rank units: the n-th preferred position costs n.
 5. **Polish**: each label moves to its best-ranked free candidate.
 6. **Columns** (with `align: 'columns'`): dense clusters are stacked in columns, positions solved by isotonic regression (pool adjacent violators) around the anchors' heights. Callouts use the same stacking along the edges, before the greedy pass.
 
-Inspirations, none of whose code is reused: Imhof's position preferences, reordered after the Atelier's practice; Christensen, Marks & Shieber (1995) on point-feature label placement; the FALP and ejection-chain search of QGIS's PAL; MapLibre's sticky anchors and grid index; vega-label's occupancy bitmap; d3-annotation's connectors; Philippe Rivière's *Automated label placement (France)* notebook; Bekos, Kaufmann, Symvonis & Wolff (2007) on boundary labeling; the excentric and aligned callouts of the Atelier's maps.
+### Approach
+
+Most automatic placement tools try to show as many labels as they can. This one aims at a clean result, ready to publish or print, close to what a cartographer or a graphic designer would compose. Its rules come first from the empirical practice of the Atelier de cartographie de Sciences Po, drawn from its published maps and tested figure by figure in the demo page: the order of positions around a symbol (inside, then the sides, then the corners), octilinear or orthogonal leaders that appear only when a label no longer reads as attached, columns of aligned names beside dense clusters and callouts in the margin, area names wholly inside or clearly outside, no ambiguity with a neighbouring symbol, and above all fewer names: the hierarchy decides which to keep, and a clean map often shows far fewer than all.
+
+Algorithmic inspirations, none of whose code is reused: Christensen, Marks & Shieber (1995) on point-feature label placement; the FALP and ejection-chain search of QGIS's PAL; MapLibre's sticky anchors and grid index; vega-label's occupancy bitmap; d3-annotation's connectors; Philippe Rivière's *Automated label placement (France)* notebook; Bekos, Kaufmann, Symvonis & Wolff (2007) on boundary labeling.
 
 ## Demo
 
