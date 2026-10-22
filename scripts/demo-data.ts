@@ -4,6 +4,9 @@
 // - Monde: countries of world-countries.geojson (Natural Earth 1:110m) with their 2023 population (World Bank),
 //   projected with Equal Earth in kilometres (y up): rows [French name, population, x, y] at an interior point,
 //   and outlines simplified for the background.
+// - Départements: the 96 départements of metropolitan France (IGN Admin Express 2025) with their births in 2018
+//   summed from the communes, [name, births, x, y] at an interior point in Lambert-93 decametres, their outlines,
+//   and the outline of France (coasts and borders) as lines.
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 
@@ -135,5 +138,36 @@ for (const f of world.features) {
   const [x, y] = pole(largest);
   rows.push([SHORT[iso2] ?? fr.of(iso2)!, pop, Math.round(x), Math.round(y)]);
 }
+// Départements, from france-departements-2025.geojson.gz, made with GDAL from Admin Express (see bench/data).
+const deps = JSON.parse(gunzipSync(data('france-departements-2025.geojson.gz')).toString('utf8'));
+const depFeatures = deps.features.filter((f: { properties: { code: string } }) => f.properties.code !== 'contour');
+const depPolygons: Pt[][][][] = depFeatures.map((f: { geometry: { type: string; coordinates: unknown } }) =>
+  f.geometry.type === 'Polygon' ? [f.geometry.coordinates as Pt[][]] : (f.geometry.coordinates as Pt[][][])
+);
+const boxes = depPolygons.map((polys) => {
+  const pts = polys.flat(2);
+  return [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))];
+});
+const births = depPolygons.map(() => 0);
+for (const c of communes) {
+  const k = depPolygons.findIndex((polys, d) => {
+    const b = boxes[d];
+    return c[3] >= b[0] && c[3] <= b[2] && c[4] >= b[1] && c[4] <= b[3] && polys.some((p) => inside(c[3], c[4], p));
+  });
+  if (k >= 0) births[k] += c[2];
+}
+const dam = (ring: Pt[]) => ring.map(([x, y]) => [Math.round(x / 10), Math.round(y / 10)]);
+const departements = {
+  rows: depFeatures.map((f: { properties: { nom: string } }, d: number) => {
+    const largest = depPolygons[d].reduce((a, b) => (Math.abs(area(b[0])) > Math.abs(area(a[0])) ? b : a));
+    const [x, y] = pole(largest);
+    return [f.properties.nom, births[d], r1(x / 10), r1(y / 10)];
+  }),
+  polygons: depPolygons.map((polys) => polys.flatMap((p) => p.map((ring) => dam(simplifyRing(ring, 1200))).filter((r) => r.length > 3))),
+  coast: (deps.features.find((f: { properties: { code: string } }) => f.properties.code === 'contour').geometry.coordinates as Pt[][]).map((line) =>
+    dam(line[0][0] === line[line.length - 1][0] && line[0][1] === line[line.length - 1][1] ? simplifyRing(line, 1200) : simplify(line, 1200))
+  )
+};
+process.stderr.write(`departements ${departements.rows.length}, births ${births.reduce((a, b) => a + b, 0)}, points ${departements.polygons.flat(2).length}, coast ${departements.coast.flat().length}\n`);
 process.stderr.write(`normandie ${normandie.length}, world ${rows.length}, outlines ${outlines.length} (${outlines.reduce((s, r) => s + r.length, 0)} points), without data: ${missing.join('; ')}\n`);
-process.stdout.write(JSON.stringify({ normandie, world: { rows, outlines } }));
+process.stdout.write(JSON.stringify({ normandie, world: { rows, outlines }, departements }));

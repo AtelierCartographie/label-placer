@@ -74,7 +74,7 @@ The optimizer never hides a label to show one of lower or equal priority.
 Each movable label tries, in order of cost:
 
 1. `inside` its symbol, when the box fits in it (`inside: false` to disable);
-2. `center` for an `area` symbol, cheaper when the label fits in the inscribed circle, or for a `polygon` symbol, wholly inside it: on the anchor, else shifted by up to three label heights across and two along (0.5 per label height);
+2. `center` for an `area` symbol, cheaper when the label fits in the inscribed circle, or for a `polygon` symbol, wholly inside it: on the anchor, else shifted on a grid of half label heights, up to four across and three along (0.5 per label height);
 3. the `positions` around the symbol, in order of preference (default: `right`, `top`, `left`, `bottom`, `top-right`, `top-left`, `bottom-right`, `bottom-left`: the practice of the Atelier de cartographie, sides before corners);
 4. the same positions on farther rings, with a leader line (`leader.rings`, default one and two label heights).
 
@@ -91,6 +91,7 @@ Breaking and measuring text needs the fonts, so it stays with the caller. The ca
 - Inside, the label is centered on its anchor (a pole of inaccessibility is a good one), or shifted on a grid around it, wholly inside.
 - Outside, the positions start where the outline crosses the direction from the anchor, with leaders starting on the outline.
 - Across the outline, a candidate is discarded: a label of a coastal département sits on land or at sea, never on the coastline.
+- Each area first takes a spot inside itself, by priority, before any label is set outside its own area: a département too small for its name must not take the room its neighbour needs. Ejection chains never eject a label from inside its own area.
 - Outside its polygon, a label next to it must not land in, or across, another label's polygon. With a leader it may, at the ambiguity cost: the leader names its feature (small areas, such as the départements around Paris).
 
 ### Columns
@@ -224,7 +225,7 @@ Inspirations, none of whose code is reused: Imhof's position preferences, reorde
 
 ## Demo
 
-`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie` or `?zone=monde` switches its data from Bretagne to the communes of Normandie or to the countries of the world (Equal Earth), to see the engine at other scales.
+`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie`, `?zone=monde` or `?zone=departements` switches its data from Bretagne to the communes of Normandie, the countries of the world (Equal Earth) or the 96 départements of metropolitan France, named inside their outline or outside, on one or two lines, with the outline of France as a line obstacle. A slider sets the share of names to place, the most important first.
 
 ## Benchmark
 

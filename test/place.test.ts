@@ -311,6 +311,15 @@ describe('placeLabels', () => {
     expect([r.placement, r.ring]).toEqual(['left', 1]);
   });
 
+  it('lets an area take its own room before a neighbour sets its label there', () => {
+    const square = (x0: number, y0: number, x1: number, y1: number) => ({ type: 'polygon' as const, rings: [[[x0, y0], [x1, y0], [x1, y1], [x0, y1]] as Point[]] });
+    // Too small for its name, and of higher priority: its only way out leads into its neighbour.
+    const small: LabelInput = { x: 115, y: 115, width: 60, height: 10, symbol: square(100, 100, 130, 130), priority: 2 };
+    const neighbour: LabelInput = { x: 165, y: 115, width: 50, height: 10, symbol: square(130, 105, 200, 125), priority: 1 };
+    const r = placeLabels([small, neighbour], { bounds: [0, 0, 300, 200], positions: ['right'], leader: { rings: [10] } });
+    expect(r.labels[1].placement).toBe('center');
+  });
+
   it('keeps label boxes off line obstacles, not leaders', () => {
     const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 } };
     const coast = (x: number, soft?: boolean): PlaceOptions['obstacles'] => [{ type: 'line', points: [[x, 0], [x, 200]], soft }];

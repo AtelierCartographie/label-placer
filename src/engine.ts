@@ -459,12 +459,21 @@ export class Placer {
 
   greedy(previous?: (string | null)[]): void {
     this.previous = previous;
+    for (const i of this.order) if (this.fixed(i) && this.feasible[i].length) this.place(i, this.feasible[i][0]);
+    // Each area first takes a spot inside itself, by priority: a label set outside its own area
+    // must not take the room its neighbour needs inside.
+    for (const i of this.order) {
+      if (this.fixed(i) || this.labels[i].symbol?.type !== 'polygon') continue;
+      const inside = this.resolve(i).filter((c) => c.placement === 'center');
+      const key = previous?.[i];
+      const kept = key ? inside.find((c) => candidateKey(c) === key && this.isFree(i, c)) : undefined;
+      if (kept) this.sticky.add(i);
+      const chosen = kept ?? inside.find((c) => this.isFree(i, c));
+      if (chosen) this.place(i, chosen);
+    }
     for (const i of this.order) {
       const list = this.feasible[i];
-      if (this.fixed(i)) {
-        if (list.length) this.place(i, list[0]);
-        continue;
-      }
+      if (this.fixed(i) || this.current[i]) continue;
       let chosen: Candidate | null = null;
       const key = previous?.[i];
       if (key) {
@@ -506,7 +515,7 @@ export class Placer {
    * Ejection chains: a hidden label takes a candidate if the at most two labels in its way
    * can move to a free spot (or, through one more ejection, to a spot freed for them). A
    * blocker that cannot move is hidden only when it is optional and of lower priority, so
-   * the hierarchy never degrades.
+   * the hierarchy never degrades. A label inside its own area is never ejected.
    */
   chain(maxWork: number, deadline: number): void {
     const stop = () => this.work >= maxWork || performance.now() > deadline;
@@ -520,7 +529,8 @@ export class Placer {
           if (stop()) return;
           const blockers = this.conflicts(i, c, CHAIN_MAX_EJECT + 1);
           if (blockers.length > CHAIN_MAX_EJECT) continue;
-          if (blockers.some((b) => !this.isMovable(b))) continue;
+          // A label inside its own area keeps it: no other label may take that room from it.
+          if (blockers.some((b) => !this.isMovable(b) || (this.current[b]!.placement === 'center' && this.labels[b].symbol?.type === 'polygon'))) continue;
           this.journal = new Map();
           for (const b of blockers) this.unplace(b);
           this.place(i, c);

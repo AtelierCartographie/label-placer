@@ -80,7 +80,7 @@ export function makeCandidate(
 
 /** Grid of offsets, in label heights, for a label inside its polygon: nearest to the anchor first. */
 const POLYGON_OFFSETS: Point[] = [];
-for (let dy = -2; dy <= 2; dy++) for (let dx = -3; dx <= 3; dx++) POLYGON_OFFSETS.push([dx, dy]);
+for (let dy = -6; dy <= 6; dy++) for (let dx = -8; dx <= 8; dx++) POLYGON_OFFSETS.push([dx / 2, dy / 2]);
 POLYGON_OFFSETS.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
 /** Cost of moving a label inside its polygon away from its anchor, per label height. */
 const POLYGON_SHIFT_COST = 0.5;

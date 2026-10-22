@@ -26,5 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `callout`: labels set in columns along the left or right edge, with orthogonal leaders
 - Columns take along the labels in their way, untangle crossing leaders, reach the sea if need be, within a deterministic budget
 - `orthogonal` leader style: a vertical leg out of the symbol, then a horizontal one into the label
-- Demo zones: Bretagne, Normandie and the world (`?zone=`)
+- Demo zones: Bretagne, Normandie, the world and the départements (`?zone=`), and a slider for the share of names to place
+- Areas take a spot inside themselves before labels from outside; chains never eject a label from inside its own area; a finer grid of inside positions
 - Benchmark on French communes
