@@ -5,7 +5,7 @@ Automatic label placement for **maps** and **charts**, independent of the render
 - Ordered candidate positions around point symbols (by default the sides first, right, above, left, below, then the corners), inside a symbol when the label fits, centered on areas.
 - Polygons: a label goes wholly inside its polygon, or wholly outside, never across its outline.
 - Several layouts per label (one line, two lines...): the engine picks the one that fits.
-- Aligned labels: dense clusters in columns beside them, callouts in columns along the edge of the map.
+- Aligned labels: dense clusters in columns beside them or in rows above or below them, callouts along the edges of the map.
 - No ambiguity: a label avoids spots as close to another symbol as to its own.
 - Priorities and a hierarchy of modes: `pinned` (placed by hand), `required` (never hidden), `optional`.
 - Obstacles: other symbols, legend, title, any rectangle or circle, lines such as coastlines, filled polygons such as the land or a mask, with hard and soft costs.
@@ -96,11 +96,13 @@ Breaking and measuring text needs the fonts, so it stays with the caller. The ca
 
 ### Columns
 
-`align: 'columns'` brings order to dense clusters: after the optimizer, the labels of each cluster (three named anchors or more, within 4 label heights of one another, split again when more than ten) are stacked in a column beside it, flushed against a common edge, in the order of their anchors so that their leaders do not cross. The whole cluster goes on the right if it can, else on the left, else split at its median between both sides, else only the labels that already needed a leader. The column steps away from the cluster, by 1, 2, 3 up to 20 label heights, until its boxes are clear, out to sea if need be; leaders may cross the cluster's symbols, not labels: a label in the column's way joins it, when it may move and its anchor lies between the cluster and the column. Neighbours whose leaders would cross are swapped, and a label whose leader would be longer than 12 label heights keeps its place. A label that does not fit keeps its place, and hidden labels of the cluster join when they fit; a column holds twenty labels at most. Columns spend a deterministic budget of 1,000 candidate tests per label shown, the most important clusters first. A column is set only when it shows more names, or tidies two labels or more that already needed a leader: labels that fit next to their symbol stay there. Labels inside their symbol, pinned, sticky or forced labels stay where they are. `placement` is `column`.
+`align: 'columns'` brings order to dense clusters: after the optimizer, the labels of each cluster (three named anchors or more, within 4 label heights of one another, split again when more than ten) are stacked in a column beside it, flushed against a common edge, in the order of their anchors so that their leaders do not cross. The whole cluster goes on the right if it can, else on the left, else split at its median between both sides, else in rows above it, else below it, else only the labels that already needed a leader. The column steps away from the cluster, by 1, 2, 3 up to 20 label heights, until its boxes are clear, out to sea if need be; leaders may cross the cluster's symbols, not labels: a label in the column's way joins it, when it may move and its anchor lies between the cluster and the column. Neighbours whose leaders would cross are swapped, and a label whose leader would be longer than 12 label heights keeps its place. A label that does not fit keeps its place, and hidden labels of the cluster join when they fit; a column holds twenty labels at most. Columns spend a deterministic budget of 1,000 candidate tests per label shown, the most important clusters first. A column is set only when it shows more names, or tidies two labels or more that already needed a leader: labels that fit next to their symbol stay there. Labels inside their symbol, pinned, sticky or forced labels stay where they are. `placement` is `column`.
+
+In rows above or below the cluster, each label starts right over its anchor, with a vertical leader into its start (`textAnchor` is `start`). So that no leader runs through a label, a label is set one row farther than every label to its right whose anchor lies under it; labels that do not overlap share a row. The mirror image, labels ending over their anchors (`end`) and the rightmost farthest, is tried too: the one that keeps the most important label of the cluster nearest comes first, and the other wins only when it shows more labels.
 
 ### Callouts
 
-`callout: true` (or `'left'`, `'right'`) sets a label in a column along the left or right edge of the bounds, the nearer one by default: boundary labeling, for a few chosen labels, often on several lines (give their measured size). Callouts are stacked in the order of their anchors, as close to their height as the others allow, and joined to their symbol by an orthogonal leader, horizontal from the label then vertical; neighbours whose leaders would cross are swapped. They are placed first and never moved, like pinned labels, and the others avoid them. `placement` is `margin`.
+`callout: true` (or `'left'`, `'right'`) sets a label in a column along the left or right edge of the bounds, the nearer one by default: boundary labeling, for a few chosen labels, often on several lines (give their measured size). Callouts are stacked in the order of their anchors, as close to their height as the others allow, and joined to their symbol by an orthogonal leader, horizontal from the label then vertical. `callout: 'top'` or `'bottom'` sets it in a row along that edge instead, centered as near over its anchor as the others allow (`textAnchor` `middle`), the leader vertical from the label then horizontal. Neighbours whose leaders would cross are swapped. They are placed first and never moved, like pinned labels, and the others avoid them. `placement` is `margin`.
 
 ### Line obstacles
 
@@ -187,7 +189,7 @@ new TextLayer({
 
 ### `placeLabels(labels, options): PlacementResult`
 
-`LabelInput`: `id?`, `x`, `y`, `width`, `height` (both 0 for a symbol without a label), `layouts?` (`[{ width, height, cost? }]`), `symbol?` (`{ type: 'circle', radius }`, `{ type: 'rect', width, height }`, `{ type: 'area', inscribedRadius }` or `{ type: 'polygon', rings }`), `priority?`, `mode?`, `offset?` (pinned), `leader?` (default true), `callout?` (`true`, `'left'` or `'right'`).
+`LabelInput`: `id?`, `x`, `y`, `width`, `height` (both 0 for a symbol without a label), `layouts?` (`[{ width, height, cost? }]`), `symbol?` (`{ type: 'circle', radius }`, `{ type: 'rect', width, height }`, `{ type: 'area', inscribedRadius }` or `{ type: 'polygon', rings }`), `priority?`, `mode?`, `offset?` (pinned), `leader?` (default true), `callout?` (`true`, `'left'`, `'right'`, `'top'` or `'bottom'`).
 
 `PlaceOptions`:
 
@@ -223,7 +225,7 @@ Costs are in position-rank units: the n-th preferred position costs n.
 3. **Greedy pass**: by mode then priority, each label takes its first free candidate. Placed labels and their leaders go in a uniform grid.
 4. **Ejection chains**: a hidden label takes a candidate if the one or two labels in its way can move to free spots, directly or by pushing one more label. A label that cannot move is hidden only if it ranks lower.
 5. **Polish**: each label moves to its best-ranked free candidate.
-6. **Columns** (with `align: 'columns'`): dense clusters are stacked in columns, positions solved by isotonic regression (pool adjacent violators) around the anchors' heights. Callouts use the same stacking along the edges, before the greedy pass.
+6. **Columns** (with `align: 'columns'`): dense clusters are stacked in columns, positions solved by isotonic regression (pool adjacent violators) around the anchors' heights, or in rows above or below them, staggered so that vertical leaders run clear. Callouts use the same stacking along the edges, before the greedy pass.
 
 ### Approach
 
@@ -256,9 +258,8 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 
 ## Roadmap
 
-- Callouts along the top and bottom edges, and an exact boundary labeling (minimal total leader length without crossings).
+- An exact boundary labeling (minimal total leader length without crossings).
 - Columns on a world map: Central and Eastern Europe still lack room (Russia, Ukraine and Turkey fill the east); leaders routed around labels rather than taking them along.
-- Columns above or below a cluster, labels stacked with vertical leaders from their start.
 - Group labels: one block listing a group too dense to name one by one ("Caraïbes, du Nord au Sud : …").
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.

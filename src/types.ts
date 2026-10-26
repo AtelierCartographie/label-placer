@@ -63,10 +63,11 @@ export interface LabelInput {
   /** Whether this label may be moved away with a leader line. Defaults to true. */
   leader?: boolean;
   /**
-   * A callout: set in a column along the left or right edge of the bounds (the nearer one, or
-   * the one given), with an orthogonal leader. Placed first and never moved, like a pinned label.
+   * A callout: set in a column along the left or right edge of the bounds (`true`: the nearer
+   * one), or in a row along the `top` or `bottom` edge, with an orthogonal leader. Placed first
+   * and never moved, like a pinned label.
    */
-  callout?: boolean | 'left' | 'right';
+  callout?: boolean | 'left' | 'right' | 'top' | 'bottom';
 }
 
 /**

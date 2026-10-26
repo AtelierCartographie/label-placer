@@ -26,6 +26,11 @@ const COLUMN_LEADER = 12;
 /** Labels a column may hold, with those it takes along. */
 const COLUMN_MAX = 20;
 
+/** Where a column goes beside its cluster: a column on the right or left, rows above or below. */
+type Side = 'right' | 'left' | 'above' | 'below';
+const SIGN: Record<Side, 1 | -1> = { right: 1, left: -1, above: -1, below: 1 };
+const isRows = (side: Side) => side === 'above' || side === 'below';
+
 function median(values: number[]): number {
   if (values.length === 0) return 1;
   const sorted = values.slice().sort((a, b) => a - b);
@@ -52,6 +57,39 @@ function areaOutside([x0, y0, x1, y1]: Box, [bx0, by0, bx1, by1]: Box): number {
   const w = Math.max(0, Math.min(x1, bx1) - Math.max(x0, bx0));
   const h = Math.max(0, Math.min(y1, by1) - Math.max(y0, by0));
   return (x1 - x0) * (y1 - y0) - w * h;
+}
+
+function polylineLength(line: Point[] | null): number {
+  let length = 0;
+  for (let p = 1; p < (line?.length ?? 0); p++) length += Math.hypot(line![p][0] - line![p - 1][0], line![p][1] - line![p - 1][1]);
+  return length;
+}
+
+/**
+ * Centers of boxes of the given sizes along one axis, in this order, each as close to its
+ * target as the others allow (isotonic regression, pool adjacent violators), `gap` apart, and
+ * shifted to stay within the span when they can.
+ */
+function spread(targets: number[], sizes: number[], gap: number, [lo, hi]: [number, number]): number[] {
+  const n = targets.length;
+  // Offsets that keep the boxes apart, then pool adjacent violators on the shifted targets.
+  const offset = new Array<number>(n).fill(0);
+  for (let k = 1; k < n; k++) offset[k] = offset[k - 1] + (sizes[k - 1] + sizes[k]) / 2 + gap;
+  const blocks: { sum: number; count: number }[] = [];
+  for (let k = 0; k < n; k++) {
+    blocks.push({ sum: targets[k] - offset[k], count: 1 });
+    while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].count > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].count) {
+      const b = blocks.pop()!;
+      blocks[blocks.length - 1].sum += b.sum;
+      blocks[blocks.length - 1].count += b.count;
+    }
+  }
+  const out: number[] = [];
+  for (const b of blocks) for (let k = 0; k < b.count; k++) out.push(b.sum / b.count + offset[out.length]);
+  const low = out[0] - sizes[0] / 2 - lo;
+  const high = out[n - 1] + sizes[n - 1] / 2 - hi;
+  const shift = low < 0 ? -low : high > 0 ? -Math.min(high, low) : 0;
+  return out.map((v) => v + shift);
 }
 
 function leaderHitsBox(leader: Point[], c: Candidate): boolean {
@@ -260,9 +298,9 @@ export class Placer {
   }
 
   /**
-   * Callouts go in a column along the left or right edge of the bounds, in the order of their
-   * anchors as far as their leaders allow: a horizontal leg from the label, then a vertical one
-   * to the symbol (boundary labeling).
+   * Callouts go in a column along the left or right edge of the bounds, or in a row along the
+   * top or bottom edge, in the order of their anchors as far as their leaders allow: a leg
+   * across from the label, then one along the edge to the symbol (boundary labeling).
    */
   private placeCallouts(): void {
     const s = this.settings;
@@ -271,7 +309,7 @@ export class Placer {
     for (const side of [-1, 1] as const) {
       const group = callouts.filter((i) => {
         const c = this.labels[i].callout;
-        return c === 'left' ? side < 0 : c === 'right' ? side > 0 : (this.labels[i].x < (bx0 + bx1) / 2) === side < 0;
+        return c === 'left' ? side < 0 : c === 'right' ? side > 0 : c === true && (this.labels[i].x < (bx0 + bx1) / 2) === side < 0;
       });
       if (!group.length) continue;
       const width = Math.max(...group.map((i) => this.labels[i].width));
@@ -279,6 +317,17 @@ export class Placer {
       const [order, cands] = this.untangle(
         group.slice().sort((a, b) => this.labels[a].y - this.labels[b].y || a - b),
         (o) => this.stack(o, side, column, s.gap, [by0, by1], 'margin', (i, box) => this.calloutLeader(i, box, side))
+      );
+      order.forEach((i, k) => (this.feasible[i] = [cands[k]]));
+    }
+    for (const side of [-1, 1] as const) {
+      const group = callouts.filter((i) => this.labels[i].callout === (side < 0 ? 'top' : 'bottom'));
+      if (!group.length) continue;
+      const height = Math.max(...group.map((i) => this.labels[i].height));
+      const row = side < 0 ? by0 + height : by1 - height;
+      const [order, cands] = this.untangle(
+        group.slice().sort((a, b) => this.labels[a].x - this.labels[b].x || a - b),
+        (o) => this.stackRow(o, side, row, s.gap, [bx0, bx1], (i, box) => this.rowCalloutLeader(i, box, side))
       );
       order.forEach((i, k) => (this.feasible[i] = [cands[k]]));
     }
@@ -318,36 +367,56 @@ export class Placer {
     sizes?: [number, number][]
   ): Candidate[] {
     const size = (k: number) => sizes?.[k] ?? [this.labels[order[k]].width, this.labels[order[k]].height];
-    const n = order.length;
-    this.work += n;
-    // Offsets that keep the boxes apart, then pool adjacent violators on the shifted targets.
-    const offset = new Array<number>(n).fill(0);
-    for (let k = 1; k < n; k++) offset[k] = offset[k - 1] + (size(k - 1)[1] + size(k)[1]) / 2 + gap;
-    const blocks: { sum: number; count: number }[] = [];
-    for (let k = 0; k < n; k++) {
-      blocks.push({ sum: this.labels[order[k]].y - offset[k], count: 1 });
-      while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].count > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].count) {
-        const b = blocks.pop()!;
-        blocks[blocks.length - 1].sum += b.sum;
-        blocks[blocks.length - 1].count += b.count;
-      }
-    }
-    const ys: number[] = [];
-    for (const b of blocks) for (let k = 0; k < b.count; k++) ys.push(b.sum / b.count + offset[ys.length]);
-    // Keep the column within the bounds.
-    const low = ys[0] - size(0)[1] / 2 - top;
-    const high = ys[n - 1] + size(n - 1)[1] / 2 - bottom;
-    const shift = low < 0 ? -low : high > 0 ? -Math.min(high, low) : 0;
+    this.work += order.length;
+    const ys = spread(
+      order.map((i) => this.labels[i].y),
+      order.map((_, k) => size(k)[1]),
+      gap,
+      [top, bottom]
+    );
     return order.map((i, k) => {
       const [w, h] = size(k);
-      const y = ys[k] + shift;
+      const y = ys[k];
       const box: Box = side > 0 ? [column, y - h / 2, column + w, y + h / 2] : [column - w, y - h / 2, column, y + h / 2];
       const lead = leader(i, box);
-      let length = 0;
-      for (let p = 1; p < (lead?.length ?? 0); p++) length += Math.hypot(lead![p][0] - lead![p - 1][0], lead![p][1] - lead![p - 1][1]);
-      const c = makeCandidate(box, this.settings.leaderBaseCost + (this.settings.leaderLengthCost * length) / this.unit, placement, 1, side > 0 ? 'start' : 'end', 'middle', lead);
-      return c;
+      return makeCandidate(box, this.settings.leaderBaseCost + (this.settings.leaderLengthCost * polylineLength(lead)) / this.unit, placement, 1, side > 0 ? 'start' : 'end', 'middle', lead);
     });
+  }
+
+  /**
+   * Candidates for labels set in a row, in this order, each centered as close to its anchor as
+   * the others allow, flushed against `row`: below it when `side` is 1, above it when -1.
+   */
+  private stackRow(order: number[], side: 1 | -1, row: number, gap: number, span: [number, number], leader: (i: number, box: Box) => Point[] | null): Candidate[] {
+    this.work += order.length;
+    const xs = spread(
+      order.map((i) => this.labels[i].x),
+      order.map((i) => this.labels[i].width),
+      gap,
+      span
+    );
+    return order.map((i, k) => {
+      const { width: w, height: h } = this.labels[i];
+      const box: Box = side > 0 ? [xs[k] - w / 2, row, xs[k] + w / 2, row + h] : [xs[k] - w / 2, row - h, xs[k] + w / 2, row];
+      const lead = leader(i, box);
+      return makeCandidate(box, this.settings.leaderBaseCost + (this.settings.leaderLengthCost * polylineLength(lead)) / this.unit, 'margin', 1, 'middle', side > 0 ? 'top' : 'bottom', lead);
+    });
+  }
+
+  /** Orthogonal leader of a callout in a row: vertical from the label, then horizontal to the symbol. */
+  private rowCalloutLeader(i: number, box: Box, side: 1 | -1): Point[] | null {
+    const l = this.labels[i];
+    const { symbolGap } = this.settings;
+    const buffered = (e: number) => (e > 0 ? e + symbolGap : 0);
+    const px = (box[0] + box[2]) / 2;
+    const py = side < 0 ? box[3] : box[1];
+    const dx = px - l.x;
+    // Towards the label, the column may meet the symbol straight away.
+    const e = buffered(symbolExtent(l.symbol, 0, side, [l.x, l.y]));
+    if (Math.abs(dx) < e) return [[px, l.y + side * Math.sqrt(e * e - dx * dx)], [px, py]];
+    if (Math.abs(py - l.y) < 1e-9) return [[l.x + Math.sign(dx) * buffered(symbolExtent(l.symbol, Math.sign(dx), 0, [l.x, l.y])), l.y], [px, py]];
+    const start: Point = [l.x + Math.sign(dx) * buffered(symbolExtent(l.symbol, Math.sign(dx), 0, [l.x, l.y])), l.y];
+    return [start, [px, l.y], [px, py]];
   }
 
   /** Orthogonal leader of a callout: horizontal from the label, then vertical to the symbol. */
@@ -627,17 +696,18 @@ export class Placer {
       });
       // Nothing to show nor tidy: no column could be worth it.
       if (members.length < 2 || !members.some((i) => !this.current[i] || this.current[i]!.ring > 0)) continue;
-      if (this.column(members, 1) || this.column(members, -1)) continue;
+      if (this.column(members, 'right') || this.column(members, 'left')) continue;
       const xs = members.map((i) => this.labels[i].x).sort((a, b) => a - b);
       const mid = xs[xs.length >> 1];
       const east = members.filter((i) => this.labels[i].x >= mid);
       const west = members.filter((i) => this.labels[i].x < mid);
-      const halves = [east.length > 1 && this.column(east, 1), west.length > 1 && this.column(west, -1)];
+      const halves = [east.length > 1 && this.column(east, 'right'), west.length > 1 && this.column(west, 'left')];
       if (halves.some(Boolean)) continue;
-      for (const side of [1, -1] as const) {
+      if (this.column(members, 'above') || this.column(members, 'below')) continue;
+      for (const side of ['right', 'left'] as const) {
         const led = members.filter((i) => {
           const c = this.current[i];
-          return c && c.ring > 0 && ((c.x0 + c.x1) / 2 >= this.labels[i].x ? 1 : -1) === side;
+          return c && c.ring > 0 && ((c.x0 + c.x1) / 2 >= this.labels[i].x) === (side === 'right');
         });
         if (led.length > 1) this.column(led, side);
       }
@@ -659,44 +729,56 @@ export class Placer {
    * shows hidden labels or tidies two leaders or more; a label that does not fit keeps its
    * place. Returns whether a column was set.
    */
-  private column(group: number[], side: 1 | -1): boolean {
+  private column(group: number[], side: Side): boolean {
     const s = this.settings;
-    const edges = group.map((i) => this.labels[i].x + side * symbolExtent(this.labels[i].symbol, side, 0, [this.labels[i].x, this.labels[i].y]));
-    const start = (side > 0 ? Math.max(...edges) : Math.min(...edges)) + side * (s.gap + s.rings[0]);
+    const sign = SIGN[side];
+    const rows = isRows(side);
+    const edges = group.map((i) => {
+      const l = this.labels[i];
+      return (rows ? l.y : l.x) + sign * symbolExtent(l.symbol, rows ? 0 : sign, rows ? sign : 0, [l.x, l.y]);
+    });
+    const start = (sign > 0 ? Math.max(...edges) : Math.min(...edges)) + sign * (s.gap + s.rings[0]);
     // Worth it only to show hidden labels, or to tidy labels that already needed a leader. The
     // names it shows count first, then the labels it holds; each label height farther costs
     // an eighth of a name.
     const worth = (kept: number[]) => kept.some((i) => !this.current[i]) || kept.filter((i) => this.current[i]!.ring > 0).length > 1;
-    let best: { at: number; kept: number[]; score: number } | null = null;
-    for (const attempt of COLUMN_STEPS) {
-      if (this.work > this.alignStop) break;
-      const at = start + side * attempt * this.unit;
-      const kept = this.fitColumn(group, side, at, false);
-      const score = (kept?.filter((i) => !this.current[i]).length ?? 0) + (kept?.length ?? 0) / 4 - attempt / 8;
-      if (kept && worth(kept) && (!best || score > best.score)) best = { at, kept, score };
-      // Farther cannot do better than the whole group.
-      if (kept && group.every((i) => kept.includes(i))) break;
-    }
-    return best !== null && this.fitColumn(best.kept, side, best.at, true) !== null;
+    // Rows try labels starting over their anchors and labels ending over them, the one that
+    // keeps the most important member nearest first: it wins a tie.
+    const flushes: (1 | -1)[] = rows ? [this.preferredFlush(group), -this.preferredFlush(group) as 1 | -1] : [1];
+    let best: { at: number; kept: number[]; score: number; flush: 1 | -1 } | null = null;
+    for (const flush of flushes)
+      for (const attempt of COLUMN_STEPS) {
+        if (this.work > this.alignStop) break;
+        const at = start + sign * attempt * this.unit;
+        const kept = this.fitColumn(group, side, at, false, flush);
+        const score = (kept?.filter((i) => !this.current[i]).length ?? 0) + (kept?.length ?? 0) / 4 - attempt / 8;
+        if (kept && worth(kept) && (!best || score > best.score)) best = { at, kept, score, flush };
+        // Farther cannot do better than the whole group.
+        if (kept && group.every((i) => kept.includes(i))) break;
+      }
+    return best !== null && this.fitColumn(best.kept, side, best.at, true, best.flush) !== null;
   }
 
   /**
    * The labels that fit in a column at `at`, from the group: a label of the group whose box is
    * blocked, or whose leader crosses another one of the group, leaves it, the lowest-ranked
    * first; a label in the way of the column outside the group joins it if it may move and its
-   * anchor is on the column's side of the group, else the label of the group it hinders leaves. Placed for good with `commit`, else put back.
+   * anchor is on the column's side of the group, else the label of the group it hinders leaves.
+   * Placed for good with `commit`, else put back.
    */
-  private fitColumn(group: number[], side: 1 | -1, at: number, commit: boolean): number[] | null {
+  private fitColumn(group: number[], side: Side, at: number, commit: boolean, flush: 1 | -1 = 1): number[] | null {
     const s = this.settings;
     const [, by0, , by1] = this.bounds;
+    const sign = SIGN[side];
+    const axis = isRows(side) ? 'y' : 'x';
     const lowest = (misfits: number[]) => misfits.reduce((a, b) => (this.rank[a] > this.rank[b] ? a : b));
     const left = new Set<number>();
     let members = group.slice();
     // A label in the way joins only from between the group and the column: from the far side
     // its leader would cross the whole cluster, from beyond the column it would come from outside.
     const reachable = (o: number) =>
-      side * (this.labels[o].x - (side > 0 ? Math.min(...members.map((m) => this.labels[m].x)) : Math.max(...members.map((m) => this.labels[m].x)))) >= 0 &&
-      side * (at - this.labels[o].x) > 0;
+      sign * (this.labels[o][axis] - (sign > 0 ? Math.min(...members.map((m) => this.labels[m][axis])) : Math.max(...members.map((m) => this.labels[m][axis])))) >= 0 &&
+      sign * (at - this.labels[o][axis]) > 0;
     const drop = (i: number) => {
       left.add(i);
       members = members.filter((m) => m !== i);
@@ -707,13 +789,15 @@ export class Placer {
         const c = this.current[i];
         return c ? [c.x1 - c.x0, c.y1 - c.y0] : [this.labels[i].width, this.labels[i].height];
       };
-      const [order, cands] = this.untangle(
-        members.slice().sort((a, b) => this.labels[a].y - this.labels[b].y || a - b),
-        (o) =>
-          this.stack(o, side, at, s.gap, [by0, by1], 'column', (i, box) =>
-            leaderGeometry({ anchor: [this.labels[i].x, this.labels[i].y], symbol: this.labels[i].symbol, box, style: s.leaderStyle, symbolGap: s.symbolGap, minGap: s.minGap }),
-          o.map(size))
-      );
+      const [order, cands] = isRows(side)
+        ? ((o: number[]) => [o, this.staircase(o, sign, at, o.map(size))] as [number[], Candidate[]])(this.byStart(members, flush))
+        : this.untangle(
+            members.slice().sort((a, b) => this.labels[a].y - this.labels[b].y || a - b),
+            (o) =>
+              this.stack(o, sign, at, s.gap, [by0, by1], 'column', (i, box) =>
+                leaderGeometry({ anchor: [this.labels[i].x, this.labels[i].y], symbol: this.labels[i].symbol, box, style: s.leaderStyle, symbolGap: s.symbolGap, minGap: s.minGap }),
+              o.map(size))
+          );
       cands.forEach((c, k) => (c.layout = this.current[order[k]]?.layout ?? 0));
       // Leaders out of a dense cluster cross its symbols: only the boxes must be clear, and the
       // leaders short enough to read.
@@ -745,6 +829,52 @@ export class Placer {
       else drop(lowest(clashing));
     }
     return null;
+  }
+
+  /**
+   * Labels in rows start over their anchors (1), the rightmost nearest the cluster, unless the
+   * most important member lies left of the middle: ending over their anchors (-1), the leftmost
+   * are the nearest, and that member keeps a short leader.
+   */
+  private preferredFlush(members: number[]): 1 | -1 {
+    const xs = members.map((i) => this.labels[i].x).sort((a, b) => a - b);
+    const top = members.reduce((a, b) => (this.rank[a] < this.rank[b] ? a : b));
+    return this.labels[top].x < xs[xs.length >> 1] ? -1 : 1;
+  }
+
+  /** Members in the order rows need: from left to right when labels start over their anchors, else from right to left. */
+  private byStart(members: number[], flush: 1 | -1): number[] {
+    return members.slice().sort((a, b) => flush * (this.labels[a].x - this.labels[b].x) || a - b);
+  }
+
+  /**
+   * Candidates for labels in rows above (`sign` -1) or below (1) their cluster, from `at`: each
+   * label starts, or ends, right over its anchor, with a vertical leader into its start, or its
+   * end, in the order given by `byStart`. A label is set one row farther than any later label
+   * whose anchor lies under it, so that no leader runs through a label; labels that do not
+   * overlap share a row.
+   */
+  private staircase(order: number[], sign: 1 | -1, at: number, sizes: [number, number][]): Candidate[] {
+    const s = this.settings;
+    const n = order.length;
+    this.work += n;
+    // Labels start over their anchors when the order runs from left to right.
+    const start = n < 2 || this.labels[order[0]].x <= this.labels[order[n - 1]].x;
+    const x = (k: number) => this.labels[order[k]].x;
+    const level = new Array<number>(n).fill(0);
+    for (let k = n - 2; k >= 0; k--)
+      for (let j = k + 1; j < n; j++) if (Math.abs(x(j) - x(k)) < sizes[k][0] + s.gap) level[k] = Math.max(level[k], level[j] + 1);
+    const row = Math.max(...sizes.map(([, h]) => h)) + s.gap;
+    return order.map((i, k) => {
+      const l = this.labels[i];
+      const [w, h] = sizes[k];
+      const edge = at + sign * level[k] * row;
+      const [x0, x1] = start ? [l.x, l.x + w] : [l.x - w, l.x];
+      const box: Box = sign < 0 ? [x0, edge - h, x1, edge] : [x0, edge, x1, edge + h];
+      const e = symbolExtent(l.symbol, 0, sign, [l.x, l.y]);
+      const lead: Point[] = [[l.x, l.y + sign * (e > 0 ? e + s.symbolGap : 0)], [l.x, edge]];
+      return makeCandidate(box, s.leaderBaseCost + (s.leaderLengthCost * polylineLength(lead)) / this.unit, 'column', 1, start ? 'start' : 'end', 'middle', lead);
+    });
   }
 
   /** Whether a placed label may be taken into a column: one that could move there itself. */

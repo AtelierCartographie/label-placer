@@ -30,4 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Areas take a spot inside themselves before labels from outside; chains never eject a label from inside its own area; a finer grid of inside positions
 - `polygon` obstacles, filled: hard, a mask for label boxes and leaders; soft, a cost by the share of the box they cover, so that names prefer the sea
 - Demo: the sea rather than the land, with the coastline as a soft line and the regions beyond the map as a mask
+- Callouts along the top or bottom edge (`callout: 'top'`, `'bottom'`), centered over their anchors, with leaders vertical from the label
+- Columns in rows above or below a cluster when neither side has room: labels start (or end) over their anchors, with vertical leaders into their start (or end), staggered so that no leader runs through a label
+- Demo: a cluster whose sides can be walled off, to see a column, the halves, then rows above or below; callouts on all four edges
 - Benchmark on French communes

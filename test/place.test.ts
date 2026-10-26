@@ -378,6 +378,56 @@ describe('placeLabels', () => {
     expect(r.stats.placed).toBeGreaterThan(placeLabels(cluster, { ...options, align: 'none' }).stats.placed);
   });
 
+  it('stacks a cluster with no room on its sides in rows above it, with vertical leaders into their start or end', () => {
+    // Five towns in a corridor: walls on both sides and below.
+    const cluster: LabelInput[] = [270, 278, 286, 292, 300].map((x, i) => ({
+      id: i,
+      x,
+      y: 250 + ((i * 7) % 11),
+      width: 38,
+      height: 10,
+      symbol: { type: 'circle', radius: 3 },
+      priority: 10 - i
+    }));
+    const walls: Box[] = [[0, 0, 262, 400], [345, 0, 600, 400], [0, 275, 600, 400]];
+    const r = placeLabels(cluster, { bounds: BOUNDS, align: 'columns', obstacles: walls.map((box) => ({ type: 'rect', box })) });
+    const rows = r.labels.filter((l) => l.placement === 'column');
+    expect(rows.length).toBeGreaterThanOrEqual(4);
+    for (const l of rows) {
+      const anchor = cluster[l.index];
+      // Above its anchor, starting right over it, the leader vertical into the start.
+      expect(l.box![3]).toBeLessThan(anchor.y);
+      expect(l.box![0]).toBe(anchor.x);
+      expect(l.leader!.every(([x]) => x === anchor.x)).toBe(true);
+      expect(l.leader![l.leader!.length - 1]).toEqual([anchor.x, l.box![3]]);
+      expect(l.textAnchor).toBe('start');
+    }
+    // The ones on the left stand higher: no leader runs through a label.
+    for (const a of rows)
+      for (const b of rows) {
+        if (a === b) continue;
+        const [x] = a.leader![0];
+        const [, yTop] = a.leader![1];
+        const [, yBottom] = a.leader![0];
+        const through = x > b.box![0] && x < b.box![2] && b.box![3] > yTop && b.box![1] < yBottom;
+        expect(through).toBe(false);
+      }
+    const shown = visible(r.labels);
+    for (let a = 0; a < shown.length; a++) for (let b = a + 1; b < shown.length; b++) expect(overlaps(shown[a].box!, shown[b].box!)).toBe(false);
+    // With room above on both sides, labels end over their anchors when the most important
+    // town is on the left: it stays nearest, with the shortest leader.
+    const open: Box[] = [[0, 245, 262, 400], [345, 245, 600, 400], [0, 275, 600, 400]];
+    const r2 = placeLabels(cluster, { bounds: BOUNDS, align: 'columns', obstacles: open.map((box) => ({ type: 'rect', box })) });
+    const rows2 = r2.labels.filter((l) => l.placement === 'column');
+    expect(rows2.length).toBeGreaterThanOrEqual(4);
+    for (const l of rows2) {
+      expect(l.textAnchor).toBe('end');
+      expect(l.box![2]).toBe(cluster[l.index].x);
+    }
+    const first = rows2.find((l) => l.index === 0)!;
+    expect(rows2.every((l) => l.box![3] <= first.box![3])).toBe(true);
+  });
+
   it('sets callouts in a column along the edge, with orthogonal leaders that do not cross', () => {
     const callouts: LabelInput[] = [
       { id: 'a', x: 300, y: 60, width: 60, height: 22, symbol: { type: 'circle', radius: 3 }, callout: 'left' },
@@ -400,6 +450,36 @@ describe('placeLabels', () => {
       for (let b = a + 1; b < 3; b++) {
         expect(overlaps(left[a].box!, left[b].box!)).toBe(false);
         const [p, q] = [left[a].leader!, left[b].leader!];
+        for (let i = 1; i < p.length; i++)
+          for (let j = 1; j < q.length; j++) expect(segmentsCross(...p[i - 1], ...p[i], ...q[j - 1], ...q[j])).toBe(false);
+      }
+  });
+
+  it('sets callouts in a row along the top or bottom edge, with leaders vertical from the label', () => {
+    const callouts: LabelInput[] = [
+      { id: 'a', x: 100, y: 150, width: 70, height: 22, symbol: { type: 'circle', radius: 3 }, callout: 'top' },
+      { id: 'b', x: 130, y: 200, width: 70, height: 22, symbol: { type: 'circle', radius: 3 }, callout: 'top' },
+      { id: 'c', x: 400, y: 120, width: 60, height: 22, symbol: { type: 'circle', radius: 3 }, callout: 'top' },
+      { id: 'd', x: 250, y: 200, width: 60, height: 22, symbol: { type: 'circle', radius: 3 }, callout: 'bottom' }
+    ];
+    const r = placeLabels(callouts, { bounds: [0, 0, 500, 300] });
+    const top = r.labels.slice(0, 3);
+    for (const l of top) {
+      expect([l.placement, l.textAnchor, l.box![3]]).toEqual(['margin', 'middle', 22]);
+      // Vertical from the middle of the label's lower edge, then horizontal to the symbol.
+      const end = l.leader![l.leader!.length - 1];
+      expect(end).toEqual([(l.box![0] + l.box![2]) / 2, 22]);
+      expect(Math.abs(l.leader![0][1] - callouts[l.index].y) < 1e-9 || l.leader!.length === 2).toBe(true);
+    }
+    // Alone in its span, a label sits right above its anchor, with a single vertical leg.
+    expect((top[2].box![0] + top[2].box![2]) / 2).toBe(400);
+    expect(top[2].leader).toEqual([[400, 120 - 3 - 5.5], [400, 22]]);
+    // Close anchors are pushed apart in their order.
+    expect(top[0].box![2]).toBeLessThanOrEqual(top[1].box![0]);
+    expect(r.labels[3].box![1]).toBe(278);
+    for (let a = 0; a < 3; a++)
+      for (let b = a + 1; b < 3; b++) {
+        const [p, q] = [top[a].leader!, top[b].leader!];
         for (let i = 1; i < p.length; i++)
           for (let j = 1; j < q.length; j++) expect(segmentsCross(...p[i - 1], ...p[i], ...q[j - 1], ...q[j])).toBe(false);
       }
