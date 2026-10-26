@@ -144,6 +144,7 @@ export class Placer {
     for (const o of options.obstacles ?? []) {
       if (o.type === 'circle') raster.addCircle(o.x, o.y, o.radius, o.soft ?? false);
       else if (o.type === 'line') raster.addLine(o.points, o.soft ?? false);
+      else if (o.type === 'polygon') raster.addPolygon(o.rings, o.soft ?? false, o.cost ?? 1);
       else {
         raster.addRect(o.box, o.soft ?? false);
         if (!o.soft) hardRects.push(o.box);
@@ -249,6 +250,7 @@ export class Placer {
     // A leader over a symbol, or a soft line under a box, counts as a strip one label height wide.
     const over = leaderOverSymbols ? crossed : 0;
     if (softCost > 0) c.cost += (softCost * (raster.softArea(box) + (softCrossed + over + raster.softLineLength(box)) * unit)) / (unit * unit);
+    c.cost += raster.polygonCost(box);
     // A leader names its polygon, but the label is still better out of the others.
     if (l.symbol?.type === 'polygon' && c.ring > 0 && this.inOtherPolygon(i, box)) c.cost += this.ambiguityCost;
     if (!outside && !hit) return false;

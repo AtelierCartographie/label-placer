@@ -8,7 +8,7 @@ Automatic label placement for **maps** and **charts**, independent of the render
 - Aligned labels: dense clusters in columns beside them, callouts in columns along the edge of the map.
 - No ambiguity: a label avoids spots as close to another symbol as to its own.
 - Priorities and a hierarchy of modes: `pinned` (placed by hand), `required` (never hidden), `optional`.
-- Obstacles: other symbols, legend, title, any rectangle or circle, lines such as coastlines, with hard and soft costs.
+- Obstacles: other symbols, legend, title, any rectangle or circle, lines such as coastlines, filled polygons such as the land or a mask, with hard and soft costs.
 - Leader lines with cartographic rules: octilinear routes, a clear buffer around the symbol, and no leader while the label still reads as attached.
 - Flush alignment: a label is left-aligned on the right of its feature, right-aligned on the left, centered above or below.
 - A deterministic optimizer (ejection chains) on top of a fast greedy pass, and sticky placements across re-runs.
@@ -106,6 +106,10 @@ Breaking and measuring text needs the fonts, so it stays with the caller. The ca
 
 `{ type: 'line', points, soft? }` (coastline, border, river) keeps label boxes off a line; leaders may cross it. A soft line costs `symbolObstacles.softCost` per label height of line under the box.
 
+### Polygon obstacles
+
+`{ type: 'polygon', rings, soft?, cost? }` is filled, by the even-odd rule. Hard, it is a mask: label boxes and leaders keep off it (the gaps of an interrupted projection, the regions beyond a regional map). Soft, a label box over it costs `cost` (default 1, in position-rank units) times the share of the box it covers, and leaders cross it freely. With the land as a soft polygon, the names of coastal places prefer the sea: right on land costs the cost, left at sea its rank, 2. Half on land, a name pays half: give the coastline as a soft line too, so that crossing it costs.
+
 ### Symbols as obstacles
 
 Every label's symbol is an obstacle for the other labels. A symbol drawn without a label (filtered out, or too small to name) is passed as a label with no `width` or `height`: it is never shown, but it is an obstacle and a feature like the others. Symbols at least `symbolObstacles.hardMinRadius` large (default a quarter of a label height) block. Smaller ones only add `symbolObstacles.softCost` per label-height² covered. Making every tiny dot a hard obstacle leaves the largest features of a dense map without a label. A symbol smaller than a raster cell still counts in the cell it sits in.
@@ -190,7 +194,7 @@ new TextLayer({
 | Option             | Default (h = median label height)                | Description                                                        |
 | ------------------ | ------------------------------------------------ | ------------------------------------------------------------------ |
 | `bounds`           | required                                         | `[x0, y0, x1, y1]` labels must stay in                             |
-| `obstacles`        | `[]`                                             | `{ type: 'rect', box, soft? }`, `{ type: 'circle', x, y, radius, soft? }`, `{ type: 'line', points, soft? }` |
+| `obstacles`        | `[]`                                             | `{ type: 'rect', box, soft? }`, `{ type: 'circle', x, y, radius, soft? }`, `{ type: 'line', points, soft? }`, `{ type: 'polygon', rings, soft?, cost? }` |
 | `positions`        | sides, then corners                              | candidate positions, by preference                                 |
 | `gap`              | `0.2h`                                           | space between a symbol and an adjacent label                       |
 | `inside`           | `true`                                           | try the label inside its symbol                                    |
@@ -214,7 +218,7 @@ Costs are in position-rank units: the n-th preferred position costs n.
 
 ## How it works
 
-1. **Static obstacles** (symbols, page items) are rasterized once into coverage counts with summed-area tables, so testing a box costs four lookups. Hard rectangles are also tested exactly.
+1. **Static obstacles** (symbols, page items, lines, filled polygons by scanlines) are rasterized once into coverage counts with summed-area tables, so testing a box costs four lookups. Hard rectangles are also tested exactly.
 2. **Candidates** are built for each label and filtered against the static obstacles.
 3. **Greedy pass**: by mode then priority, each label takes its first free candidate. Placed labels and their leaders go in a uniform grid.
 4. **Ejection chains**: a hidden label takes a candidate if the one or two labels in its way can move to free spots, directly or by pushing one more label. A label that cannot move is hidden only if it ranks lower.
@@ -256,7 +260,6 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 - Columns on a world map: Central and Eastern Europe still lack room (Russia, Ukraine and Turkey fill the east); leaders routed around labels rather than taking them along.
 - Columns above or below a cluster, labels stacked with vertical leaders from their start.
 - Group labels: one block listing a group too dense to name one by one ("Caraïbes, du Nord au Sud : …").
-- Filled polygon obstacles: masks for interrupted projections, land as a soft obstacle so that labels prefer the sea.
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.
 - A demo page rendering the same placement with SVG, Canvas and deck.gl.

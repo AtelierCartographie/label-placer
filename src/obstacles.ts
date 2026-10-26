@@ -1,4 +1,4 @@
-import type { Box } from './types.ts';
+import type { Box, Point } from './types.ts';
 
 /**
  * Static obstacles rasterized once into coverage counts, with summed-area tables so that
@@ -20,6 +20,9 @@ export class ObstacleRaster {
   private lineSoft: Uint16Array | null = null;
   private lineHardSat: Float64Array | null = null;
   private lineSoftSat: Float64Array | null = null;
+  /** Soft polygons, as the summed cost of the polygons over each cell. Allocated on first use. */
+  private areaCost: Float32Array | null = null;
+  private areaCostSat: Float64Array | null = null;
 
   constructor(bounds: Box, resolution: number) {
     this.bx0 = bounds[0];
@@ -97,11 +100,55 @@ export class ObstacleRaster {
     }
   }
 
+  /**
+   * Fill the polygon (even-odd rule, holes are rings too): a hard one counts in the hard
+   * coverage, a soft one adds its cost to each cell it covers.
+   */
+  addPolygon(rings: Point[][], soft: boolean, cost = 1): void {
+    if (soft) {
+      const target = (this.areaCost ??= new Float32Array(this.width * this.height));
+      this.fill(rings, (k) => (target[k] += cost));
+    } else this.fill(rings, (k) => this.hard[k] < 65535 && this.hard[k]++);
+  }
+
+  /** Visit each cell whose center lies inside the rings, by scanlines through the cell centers. */
+  private fill(rings: Point[][], visit: (cell: number) => void): void {
+    const { width: W, height: H, res } = this;
+    // Crossings of each edge with the rows of cell centers, row by row.
+    const rows: number[][] = Array.from({ length: H }, () => []);
+    for (const ring of rings)
+      for (let a = 0, b = ring.length - 1; a < ring.length; b = a++) {
+        const ax = (ring[a][0] - this.bx0) * res;
+        const ay = (ring[a][1] - this.by0) * res;
+        const bx = (ring[b][0] - this.bx0) * res;
+        const by = (ring[b][1] - this.by0) * res;
+        if (ay === by) continue;
+        const j0 = Math.max(0, Math.ceil(Math.min(ay, by) - 0.5));
+        const j1 = Math.min(H - 1, Math.ceil(Math.max(ay, by) - 0.5) - 1);
+        for (let j = j0; j <= j1; j++) rows[j].push(ax + ((j + 0.5 - ay) * (bx - ax)) / (by - ay));
+      }
+    for (let j = 0; j < H; j++) {
+      const xs = rows[j].sort((p, q) => p - q);
+      for (let k = 0; k + 1 < xs.length; k += 2) {
+        const i1 = Math.min(W - 1, Math.ceil(xs[k + 1] - 0.5) - 1);
+        for (let i = Math.max(0, Math.ceil(xs[k] - 0.5)); i <= i1; i++) visit(j * W + i);
+      }
+    }
+  }
+
   finalize(): void {
     this.hardSat = this.sat(this.hard);
     this.softSat = this.sat(this.soft);
     if (this.lineHard) this.lineHardSat = this.sat(this.lineHard);
     if (this.lineSoft) this.lineSoftSat = this.sat(this.lineSoft);
+    if (this.areaCost) this.areaCostSat = this.sat(this.areaCost);
+  }
+
+  /** Cost of the soft polygons under the box: each one's cost times the share of the box it covers. */
+  polygonCost(box: Box): number {
+    if (!this.areaCostSat) return 0;
+    const cells = this.cellCount(box);
+    return cells > 0 ? this.sum(this.areaCostSat, box) / cells : 0;
   }
 
   /** Cells of hard lines under the box (centers inside it). */
@@ -162,7 +209,7 @@ export class ObstacleRaster {
     return t[j1 * w + i1] - t[j0 * w + i1] - t[j1 * w + i0] + t[j0 * w + i0];
   }
 
-  private sat(m: Uint16Array): Float64Array {
+  private sat(m: Uint16Array | Float32Array): Float64Array {
     const W = this.width;
     const w = W + 1;
     const t = new Float64Array(w * (this.height + 1));

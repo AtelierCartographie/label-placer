@@ -72,11 +72,18 @@ export interface LabelInput {
 /**
  * A `line` (coastline, border, river) is an obstacle for label boxes only: leaders may cross
  * it. Soft, it costs `symbolObstacles.softCost` per label height of line under the box.
+ *
+ * A `polygon` is filled (even-odd rule, holes are rings too). Hard, it is a mask that label
+ * boxes and leaders keep off: the gaps of an interrupted projection, what lies beyond the map.
+ * Soft, a label box over it costs `cost` (default 1, in position-rank units) times the share of
+ * the box it covers, and leaders cross it freely: with the land as a soft polygon, the names of
+ * coastal places prefer the sea. Give the coastline as a soft line too, so that crossing it costs.
  */
 export type Obstacle =
   | { type: 'rect'; box: Box; soft?: boolean }
   | { type: 'circle'; x: number; y: number; radius: number; soft?: boolean }
-  | { type: 'line'; points: Point[]; soft?: boolean };
+  | { type: 'line'; points: Point[]; soft?: boolean }
+  | { type: 'polygon'; rings: Point[][]; soft?: boolean; cost?: number };
 
 /**
  * `octilinear`: a 45° leg out of the symbol, then a horizontal leg into the facing side or a

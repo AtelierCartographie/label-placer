@@ -28,4 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `orthogonal` leader style: a vertical leg out of the symbol, then a horizontal one into the label
 - Demo zones: Bretagne, Normandie, the world and the départements (`?zone=`), and a slider for the share of names to place
 - Areas take a spot inside themselves before labels from outside; chains never eject a label from inside its own area; a finer grid of inside positions
+- `polygon` obstacles, filled: hard, a mask for label boxes and leaders; soft, a cost by the share of the box they cover, so that names prefer the sea
+- Demo: the sea rather than the land, with the coastline as a soft line and the regions beyond the map as a mask
 - Benchmark on French communes

@@ -333,6 +333,20 @@ describe('placeLabels', () => {
     expect(r.overlapping).toBe(false);
   });
 
+  it('sends a label to the sea when the land is a soft polygon, and keeps it off a hard one', () => {
+    // The sea on the left, land on the right; a town on land, by the shore.
+    const land: Point[][] = [[[300, 0], [600, 0], [600, 400], [300, 400]]];
+    const town: LabelInput = { x: 304, y: 200, width: 40, height: 10, symbol: { type: 'circle', radius: 3 } };
+    const at = (obstacles: PlaceOptions['obstacles']) => placeLabels([town], { bounds: BOUNDS, obstacles }).labels[0];
+    expect(at([]).placement).toBe('right');
+    // On land, right costs 3; at sea, left costs its rank, 2.
+    expect(at([{ type: 'polygon', rings: land, soft: true, cost: 3 }]).placement).toBe('left');
+    // A low cost leaves the order of positions as it is.
+    expect(at([{ type: 'polygon', rings: land, soft: true, cost: 0.5 }]).placement).toBe('right');
+    // A hard polygon is a mask: no box on it (nor any leader across it, like any hard obstacle).
+    expect(at([{ type: 'polygon', rings: land }]).box![2]).toBeLessThanOrEqual(300);
+  });
+
   it('stacks the labels of a dense cluster in a column, with leaders that do not cross', () => {
     const rnd = mulberry32(7);
     // Too dense for every name to fit next to its symbol.
