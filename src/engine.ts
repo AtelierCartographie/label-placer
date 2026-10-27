@@ -5,7 +5,7 @@ import { Grid } from './grid.ts';
 import { flushAlignment, leaderGeometry, symbolExtent } from './leader.ts';
 import { ObstacleRaster } from './obstacles.ts';
 import { boxRelation, boxRingsDistance, ringsBox } from './polygon.ts';
-import type { Box, LabelInput, LabelMode, PlaceOptions, PlacedLabel, PlacementResult, Point } from './types.ts';
+import type { Box, GroupInput, LabelInput, LabelMode, PlaceOptions, PlacedGroup, PlacedLabel, PlacementResult, Point } from './types.ts';
 
 const MODE_RANK: Record<LabelMode, number> = { pinned: 0, required: 1, optional: 2 };
 const MAX_RASTER_CELLS = 4_000_000;
@@ -13,6 +13,8 @@ const CHAIN_MAX_EJECT = 2;
 const CHAIN_DEPTH = 1;
 /** Named anchors closer than this many label heights belong to the same cluster when aligning. */
 const ALIGN_REACH = 4;
+/** Labels a group's block may push aside. */
+const GROUP_MAX_EJECT = 6;
 /** Labels a cluster needs to be set in columns, and at most in one column. */
 const ALIGN_MIN = 3;
 const ALIGN_MAX = 10;
@@ -30,6 +32,35 @@ const COLUMN_MAX = 20;
 type Side = 'right' | 'left' | 'above' | 'below';
 const SIGN: Record<Side, 1 | -1> = { right: 1, left: -1, above: -1, below: 1 };
 const isRows = (side: Side) => side === 'above' || side === 'below';
+
+/**
+ * A group's block as a label of its own: centered on the extent of its members, symbols
+ * included, with that extent as its symbol, so that its candidates go around it.
+ */
+function groupLabel(labels: LabelInput[], g: GroupInput, members: number[]): LabelInput {
+  let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const m of members) {
+    const l = labels[m];
+    const s = l.symbol;
+    const [hw, hh] = s?.type === 'circle' ? [s.radius, s.radius] : s?.type === 'rect' ? [s.width / 2, s.height / 2] : [0, 0];
+    x0 = Math.min(x0, l.x - hw);
+    y0 = Math.min(y0, l.y - hh);
+    x1 = Math.max(x1, l.x + hw);
+    y1 = Math.max(y1, l.y + hh);
+  }
+  if (!members.length) [x0, y0, x1, y1] = [0, 0, 0, 0];
+  return {
+    id: g.id,
+    x: (x0 + x1) / 2,
+    y: (y0 + y1) / 2,
+    width: members.length ? g.width : 0,
+    height: members.length ? g.height : 0,
+    layouts: g.layouts,
+    symbol: { type: 'rect', width: x1 - x0, height: y1 - y0 },
+    priority: g.priority ?? Math.max(...members.map((m) => labels[m].priority ?? 0)),
+    leader: g.leader
+  };
+}
 
 function median(values: number[]): number {
   if (values.length === 0) return 1;
@@ -144,15 +175,28 @@ export class Placer {
   /** Clear space kept between label boxes. */
   private readonly spacing: number;
   private alignStop = Infinity;
+  /** Labels given by the caller; the groups' blocks follow them in `labels`. */
+  private readonly count: number;
+  private readonly groupInputs: GroupInput[];
+  private readonly groupMembers: number[][];
+  /** For each label, the group whose block names it instead, or -1. */
+  private readonly absorbed: Int32Array;
   work = 0;
 
-  constructor(labels: LabelInput[], options: PlaceOptions) {
-    this.labels = labels;
+  constructor(input: LabelInput[], options: PlaceOptions) {
+    this.count = input.length;
+    this.groupInputs = options.groups ?? [];
+    // Members that may be named by a block: labels with a size, neither pinned nor callouts.
+    this.groupMembers = this.groupInputs.map((g) => [
+      ...new Set(g.members.filter((m) => Number.isInteger(m) && m >= 0 && m < input.length && input[m].width > 0 && input[m].height > 0 && input[m].mode !== 'pinned' && !input[m].callout))
+    ]);
+    const labels = (this.labels = this.groupInputs.length ? [...input, ...this.groupInputs.map((g, k) => groupLabel(input, g, this.groupMembers[k]))] : input);
+    this.absorbed = new Int32Array(this.count).fill(-1);
     this.bounds = options.bounds;
     const n = labels.length;
     this.current = new Array(n).fill(null);
     this.stamp = new Int32Array(n);
-    const unit = median(labels.filter((l) => l.width > 0 && l.height > 0).map((l) => l.height));
+    const unit = median(input.filter((l) => l.width > 0 && l.height > 0).map((l) => l.height));
     const [bx0, by0, bx1, by1] = options.bounds;
     this.grid = new Grid(bx0, by0, bx1, by1, unit * 2);
 
@@ -180,7 +224,7 @@ export class Placer {
     const hardMin = (this.hardMin = options.symbolObstacles?.hardMinRadius ?? 0.25 * unit);
     this.softCost = options.symbolObstacles?.softCost ?? 6;
     const minObstacle = 0.5 / resolution;
-    for (const l of labels) {
+    for (const l of input) {
       if (l.symbol?.type === 'circle' && l.symbol.radius > 0)
         raster.addCircle(l.x, l.y, Math.max(l.symbol.radius, minObstacle), l.symbol.radius < hardMin);
       else if (l.symbol?.type === 'rect') {
@@ -202,11 +246,13 @@ export class Placer {
 
     this.ambiguityCost = options.ambiguity?.cost ?? 6;
     this.ambiguityMargin = options.ambiguity?.margin ?? 0.5 * unit;
-    this.features = this.ambiguityCost > 0 ? new Features(labels, options.bounds, unit * 2) : null;
+    this.features = this.ambiguityCost > 0 ? new Features(input, options.bounds, unit * 2) : null;
     this.resolved = new Uint8Array(n);
+    // A block names several features: no ambiguity with any of them.
+    this.resolved.fill(1, this.count);
     // Polygons, for a label next to its own one: it must not land in another.
     this.polygons = new Grid(bx0, by0, bx1, by1, unit * 4);
-    labels.forEach((l, k) => {
+    input.forEach((l, k) => {
       if (l.symbol?.type !== 'polygon') return;
       const b = (this.polygonBoxes[k] = ringsBox(l.symbol.rings));
       this.polygons.insert(k, b[0], b[1], b[2], b[3]);
@@ -244,7 +290,8 @@ export class Placer {
       const ok: Candidate[] = [];
       const far: Candidate[] = [];
       const ko: Candidate[] = [];
-      for (const c of buildCandidates(l, { ...settings, rings })) (this.classify(i, c) ? ko : c.ring > settings.rings.length ? far : ok).push(c);
+      // A block goes around its members, never over them.
+      for (const c of buildCandidates(l, { ...settings, rings, inside: settings.inside && !this.isGroup(i) })) (this.classify(i, c) ? ko : c.ring > settings.rings.length ? far : ok).push(c);
       ok.sort((a, b) => a.cost - b.cost);
       far.sort((a, b) => a.cost - b.cost);
       this.feasible.push(ok);
@@ -254,7 +301,7 @@ export class Placer {
 
     this.placeCallouts();
 
-    const modeRank = (i: number) => (labels[i].callout ? 0 : MODE_RANK[labels[i].mode ?? 'optional']);
+    const modeRank = (i: number) => (this.isGroup(i) ? 3 : labels[i].callout ? 0 : MODE_RANK[labels[i].mode ?? 'optional']);
     this.order = labels
       .map((_, i) => i)
       .sort(
@@ -478,6 +525,11 @@ export class Placer {
     return false;
   }
 
+  /** Whether label i is a group's block. */
+  private isGroup(i: number): boolean {
+    return i >= this.count;
+  }
+
   private priority(i: number): number {
     return this.labels[i].priority ?? 0;
   }
@@ -555,7 +607,7 @@ export class Placer {
     }
     for (const i of this.order) {
       const list = this.feasible[i];
-      if (this.fixed(i) || this.current[i]) continue;
+      if (this.fixed(i) || this.current[i] || this.isGroup(i)) continue;
       let chosen: Candidate | null = null;
       const key = previous?.[i];
       if (key) {
@@ -606,7 +658,7 @@ export class Placer {
       improved = false;
       for (const i of this.order) {
         if (stop()) return;
-        if (this.current[i] || this.mode(i) !== 'optional' || this.fixed(i)) continue;
+        if (this.current[i] || this.mode(i) !== 'optional' || this.fixed(i) || this.isGroup(i)) continue;
         for (const c of this.resolve(i)) {
           if (stop()) return;
           const blockers = this.conflicts(i, c, CHAIN_MAX_EJECT + 1);
@@ -680,7 +732,9 @@ export class Placer {
     const shown = this.order.filter((i) => this.current[i]).length;
     this.alignStop = this.work + ALIGN_WORK * shown;
     let hidden = 0;
-    const named = this.order.filter((i) => this.labels[i].width > 0 && this.labels[i].height > 0 && (!!this.current[i] || hidden++ < shown));
+    const named = this.order.filter(
+      (i) => !this.isGroup(i) && this.absorbed[i] < 0 && this.labels[i].width > 0 && this.labels[i].height > 0 && (!!this.current[i] || hidden++ < shown)
+    );
     // A cluster too large for one column is split again with a shorter reach, and when its
     // anchors are all that close, cut in two at the median of its longer side.
     const halve = (group: number[]): number[][] => {
@@ -891,7 +945,58 @@ export class Placer {
   /** Whether a placed label may be taken into a column: one that could move there itself. */
   private joins(i: number): boolean {
     const c = this.current[i];
-    return !!c && this.isMovable(i) && this.labels[i].leader !== false && !['inside', 'center', 'column', 'margin'].includes(c.placement);
+    return !!c && !this.isGroup(i) && this.isMovable(i) && this.labels[i].leader !== false && !['inside', 'center', 'column', 'margin'].includes(c.placement);
+  }
+
+  /**
+   * Set the groups' blocks, by priority: the members' labels are taken off, and the block takes
+   * the candidate that pushes aside the fewest labels, then the cheapest; only movable labels of
+   * lower priority may be pushed aside, and they move to a free spot if they have one. In `auto`
+   * mode only a group with a member left hidden is tried. When the block finds no room, the
+   * members are put back. The hidden labels then take the room the members left, by priority.
+   */
+  group(): void {
+    const blocks = this.order.filter((i) => this.isGroup(i));
+    if (!blocks.length) return;
+    for (const p of blocks) {
+      const g = p - this.count;
+      const members = this.groupMembers[g];
+      if (!members.length) continue;
+      if ((this.groupInputs[g].mode ?? 'auto') === 'auto' && members.every((m) => this.current[m])) continue;
+      this.journal = new Map();
+      for (const m of members) this.unplace(m);
+      let best: { c: Candidate; blockers: number[] } | null = null;
+      for (const c of this.feasible[p]) {
+        const blockers = this.conflicts(p, c, (best?.blockers.length ?? GROUP_MAX_EJECT) + 1);
+        if (blockers.length > (best ? best.blockers.length - 1 : GROUP_MAX_EJECT)) continue;
+        if (blockers.some((b) => !this.isMovable(b) || this.priority(b) >= this.priority(p) || (this.current[b]!.placement === 'center' && this.labels[b].symbol?.type === 'polygon'))) continue;
+        best = { c, blockers };
+        if (!blockers.length) break;
+      }
+      if (best) {
+        for (const b of best.blockers) this.unplace(b);
+        this.place(p, best.c);
+        for (const b of best.blockers) {
+          const free = this.resolve(b).find((c) => this.isFree(b, c));
+          if (free) this.place(b, free);
+        }
+      }
+      const journal = this.journal;
+      this.journal = null;
+      if (best) {
+        for (const m of members) this.absorbed[m] = g;
+        continue;
+      }
+      for (const [t, tc] of journal) {
+        this.unplace(t);
+        if (tc) this.place(t, tc);
+      }
+    }
+    for (const i of this.order) {
+      if (this.current[i] || this.isGroup(i) || this.absorbed[i] >= 0 || this.fixed(i)) continue;
+      const c = this.resolve(i).find((c) => this.isFree(i, c));
+      if (c) this.place(i, c);
+    }
   }
 
   /** Move each placed label to its best-ranked free candidate. */
@@ -913,7 +1018,28 @@ export class Placer {
   }
 
   result(timings: PlacementResult['stats']['timings']): PlacementResult {
-    const labels: PlacedLabel[] = this.labels.map((l, i) => {
+    const groups: PlacedGroup[] = this.groupInputs.map((g, k) => {
+      const p = this.count + k;
+      const l = this.labels[p];
+      const c = this.current[p];
+      const at = c ? this.textPoint(c) : [l.x, l.y];
+      return {
+        index: k,
+        id: g.id,
+        visible: !!c,
+        members: c ? this.groupMembers[k] : [],
+        placement: c?.placement ?? null,
+        ring: c?.ring ?? 0,
+        layout: c?.layout ?? 0,
+        x: at[0],
+        y: at[1],
+        textAnchor: c?.textAnchor ?? 'middle',
+        baseline: c?.baseline ?? 'middle',
+        box: c ? [c.x0, c.y0, c.x1, c.y1] : null,
+        leader: c?.leader ?? null
+      };
+    });
+    const labels: PlacedLabel[] = this.labels.slice(0, this.count).map((l, i) => {
       const c = this.current[i];
       if (!c)
         return {
@@ -930,10 +1056,10 @@ export class Placer {
           offset: [0, 0],
           box: null,
           leader: null,
-          overlapping: false
+          overlapping: false,
+          group: this.absorbed[i] >= 0 ? this.absorbed[i] : null
         };
-      const x = c.textAnchor === 'start' ? c.x0 : c.textAnchor === 'end' ? c.x1 : (c.x0 + c.x1) / 2;
-      const y = c.baseline === 'top' ? c.y0 : c.baseline === 'bottom' ? c.y1 : (c.y0 + c.y1) / 2;
+      const [x, y] = this.textPoint(c);
       return {
         index: i,
         id: l.id,
@@ -948,12 +1074,14 @@ export class Placer {
         offset: [x - l.x, y - l.y],
         box: [c.x0, c.y0, c.x1, c.y1],
         leader: c.leader,
-        overlapping: this.forced.has(i) || (this.fixed(i) && this.conflicts(i, c, 1, false).length > 0) || this.outOfBounds(c)
+        overlapping: this.forced.has(i) || (this.fixed(i) && this.conflicts(i, c, 1, false).length > 0) || this.outOfBounds(c),
+        group: null
       };
     });
     const placed = labels.filter((l) => l.visible).length;
     return {
       labels,
+      groups,
       stats: {
         placed,
         hidden: labels.length - placed,
@@ -962,6 +1090,10 @@ export class Placer {
         timings
       }
     };
+  }
+
+  private textPoint(c: Candidate): Point {
+    return [c.textAnchor === 'start' ? c.x0 : c.textAnchor === 'end' ? c.x1 : (c.x0 + c.x1) / 2, c.baseline === 'top' ? c.y0 : c.baseline === 'bottom' ? c.y1 : (c.y0 + c.y1) / 2];
   }
 
   private outOfBounds(c: Candidate): boolean {

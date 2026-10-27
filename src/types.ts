@@ -71,6 +71,26 @@ export interface LabelInput {
 }
 
 /**
+ * One block naming a group of labels too dense to name one by one ("Caraïbes, du Nord au Sud :
+ * Cuba, Haïti…"), composed and measured by the caller like any label. It is set around the
+ * extent of its members, with a leader when it has to move away, and their labels are hidden.
+ */
+export interface GroupInput {
+  id?: string | number;
+  /** Indices, in the labels given to `placeLabels`, of the labels the block names. */
+  members: number[];
+  width: number;
+  height: number;
+  layouts?: { width: number; height: number; cost?: number }[];
+  /** Defaults to the highest priority of its members. */
+  priority?: number;
+  /** `auto` (default): only when a member would be hidden. `always`: whenever the block fits. */
+  mode?: 'auto' | 'always';
+  /** Whether the block may move away with a leader line. Defaults to true. */
+  leader?: boolean;
+}
+
+/**
  * A `line` (coastline, border, river) is an obstacle for label boxes only: leaders may cross
  * it. Soft, it costs `symbolObstacles.softCost` per label height of line under the box.
  *
@@ -164,6 +184,8 @@ export interface PlaceOptions {
   budget?: Budget;
   /** Previous result, matched by `id` (or index): labels keep their placement while it stays free. */
   previous?: PlacementResult;
+  /** Blocks naming groups of labels, tried after the optimizer when a member is left hidden. */
+  groups?: GroupInput[];
 }
 
 export interface PlacedLabel {
@@ -187,6 +209,25 @@ export interface PlacedLabel {
   leader: Point[] | null;
   /** A required or pinned label that could not avoid a conflict. */
   overlapping: boolean;
+  /** Index of the group whose block names this label instead, or null. */
+  group: number | null;
+}
+
+/** Where a group's block went. Its members have `group` set to its index and are hidden. */
+export interface PlacedGroup {
+  index: number;
+  id: string | number | undefined;
+  visible: boolean;
+  members: number[];
+  placement: Placement | null;
+  ring: number;
+  layout: number;
+  x: number;
+  y: number;
+  textAnchor: TextAnchor;
+  baseline: 'top' | 'middle' | 'bottom';
+  box: Box | null;
+  leader: Point[] | null;
 }
 
 export interface PlacementStats {
@@ -200,5 +241,6 @@ export interface PlacementStats {
 
 export interface PlacementResult {
   labels: PlacedLabel[];
+  groups: PlacedGroup[];
   stats: PlacementStats;
 }

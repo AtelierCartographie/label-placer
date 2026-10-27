@@ -34,4 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Columns in rows above or below a cluster when neither side has room: labels start (or end) over their anchors, with vertical leaders into their start (or end), staggered so that no leader runs through a label
 - Demo: a cluster whose sides can be walled off, to see a column, the halves, then rows above or below; callouts on all four edges
 - `spacing`: clear space between label boxes, and between leaders and boxes, to thin the dense areas first; demo: a slider on the opening map
+- `groups`: one block naming a group too dense to name one by one, set around its members' extent when one of them is left hidden (or always), pushing aside lower labels if need be; `result.groups`, `PlacedLabel.group`
+- Demo: group labels (around Rennes, Rouen, the petite couronne, the western Balkans)
 - Benchmark on French communes

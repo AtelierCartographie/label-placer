@@ -497,6 +497,54 @@ describe('placeLabels', () => {
     expect(top.filter((i) => spaced.labels[i].visible).length).toBeGreaterThanOrEqual(top.filter((i) => result.labels[i].visible).length - 1);
   });
 
+  it('names a group too dense to name one by one with a block around it, its members hidden', () => {
+    // Eight islands too close for their names, and a town far away.
+    const islands: LabelInput[] = Array.from({ length: 8 }, (_, i) => ({
+      id: 'i' + i,
+      x: 300 + (i % 4) * 9,
+      y: 200 + Math.floor(i / 4) * 9,
+      width: 50,
+      height: 10,
+      symbol: { type: 'circle', radius: 2 },
+      priority: 8 - i,
+      leader: false
+    }));
+    const town: LabelInput = { id: 't', x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 }, priority: 1 };
+    const all = [...islands, town];
+    const group = { id: 'g', members: islands.map((_, i) => i), width: 120, height: 34 };
+    const alone = placeLabels(all, { bounds: BOUNDS });
+    expect(visible(alone.labels.slice(0, 8)).length).toBeLessThan(8);
+    expect(alone.groups).toEqual([]);
+
+    const r = placeLabels(all, { bounds: BOUNDS, groups: [group] });
+    const [g] = r.groups;
+    expect(g.visible).toBe(true);
+    expect(g.members).toEqual(group.members);
+    for (const l of r.labels.slice(0, 8)) expect([l.visible, l.group]).toEqual([false, 0]);
+    expect([r.labels[8].visible, r.labels[8].group]).toEqual([true, null]);
+    // Around the extent of the islands, clear of their symbols.
+    const [x0, y0, x1, y1] = g.box!;
+    expect(x1 - x0).toBe(120);
+    expect(x0 >= 300 + 27 + 2 || x1 <= 298 || y0 >= 200 + 9 + 2 || y1 <= 198).toBe(true);
+
+    // Auto: no block when every member has its own name.
+    const roomy = placeLabels(all.map((l, i) => (i < 8 ? { ...l, x: 60 + i * 60 } : l)), { bounds: BOUNDS, groups: [group] });
+    expect(roomy.groups[0].visible).toBe(false);
+    expect(visible(roomy.labels.slice(0, 8)).length).toBe(8);
+    // Always: the block whenever it fits.
+    const always = placeLabels(all.map((l, i) => (i < 8 ? { ...l, x: 60 + i * 60 } : l)), { bounds: BOUNDS, groups: [{ ...group, mode: 'always' }] });
+    expect(always.groups[0].visible).toBe(true);
+    expect(visible(always.labels.slice(0, 8)).length).toBe(0);
+  });
+
+  it('puts the members back when the block of their group finds no room', () => {
+    const members: LabelInput[] = [0, 1, 2].map((i) => ({ x: 300 + i * 6, y: 200, width: 30, height: 10, symbol: { type: 'circle', radius: 2 }, priority: 3 - i }));
+    const r = placeLabels(members, { bounds: BOUNDS, groups: [{ members: [0, 1, 2], width: 900, height: 30 }] });
+    expect(r.groups[0].visible).toBe(false);
+    expect(r.labels.every((l) => l.group === null)).toBe(true);
+    expect(visible(r.labels).length).toBeGreaterThan(0);
+  });
+
   it('places more labels with ejection chains than greedily, without losing higher ones', () => {
     const greedy = placeLabels(labels, { ...options, optimize: 'none' });
     expect(result.stats.placed).toBeGreaterThanOrEqual(greedy.stats.placed);

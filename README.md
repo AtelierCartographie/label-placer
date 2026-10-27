@@ -104,6 +104,10 @@ Breaking and measuring text needs the fonts, so it stays with the caller. The ca
 
 In rows above or below the cluster, each label starts right over its anchor, with a vertical leader into its start (`textAnchor` is `start`). So that no leader runs through a label, a label is set one row farther than every label to its right whose anchor lies under it; labels that do not overlap share a row. The mirror image, labels ending over their anchors (`end`) and the rightmost farthest, is tried too: the one that keeps the most important label of the cluster nearest comes first, and the other wins only when it shows more labels.
 
+### Group labels
+
+`groups: [{ members, width, height, layouts?, priority?, mode?, leader? }]` names a group too dense to name one by one with one block ("Balkans, du nord au sud : Slovénie, Croatie…"), composed and measured by the caller like any label; `members` are indices in the labels given. After the optimizer, a group with a member left hidden (`mode: 'auto'`, the default) has its members' labels taken off and its block set around their extent, symbols included, with a leader when it has to move away: the candidate that pushes aside the fewest labels, of lower priority only (the block's is that of its most important member by default), then the cheapest. Labels pushed aside move to a free spot if they have one. With no room for the block, the members' labels come back. The hidden labels then take the room the members left. `mode: 'always'` sets the block whenever it fits. `result.groups` tells where each block went; a member named by a block has `group` set to its index and is hidden. Pinned labels and callouts are never members.
+
 ### Callouts
 
 `callout: true` (or `'left'`, `'right'`) sets a label in a column along the left or right edge of the bounds, the nearer one by default: boundary labeling, for a few chosen labels, often on several lines (give their measured size). Callouts are stacked in the order of their anchors, as close to their height as the others allow, and joined to their symbol by an orthogonal leader, horizontal from the label then vertical. `callout: 'top'` or `'bottom'` sets it in a row along that edge instead, centered as near over its anchor as the others allow (`textAnchor` `middle`), the leader vertical from the label then horizontal. Neighbours whose leaders would cross are swapped. They are placed first and never moved, like pinned labels, and the others avoid them. `placement` is `margin`.
@@ -214,10 +218,13 @@ new TextLayer({
 | `align`            | `'none'`                                         | `'columns'` stacks dense clusters in columns                       |
 | `budget`           | `{ work: 40 × labels }`                          | optimizer budget                                                   |
 | `previous`         | none                                             | earlier result, matched by `id` (else index)                       |
+| `groups`           | none                                             | blocks naming groups of labels (see Group labels)                  |
 
 Costs are in position-rank units: the n-th preferred position costs n.
 
-`PlacedLabel`: `index`, `id`, `visible`, `placement`, `ring`, `layout`, `x`, `y`, `textAnchor`, `baseline`, `offset`, `box`, `leader`, `overlapping`.
+`PlacedLabel`: `index`, `id`, `visible`, `placement`, `ring`, `layout`, `x`, `y`, `textAnchor`, `baseline`, `offset`, `box`, `leader`, `overlapping`, `group`.
+
+`PlacedGroup` (in `result.groups`): `index`, `id`, `visible`, `members`, `placement`, `ring`, `layout`, `x`, `y`, `textAnchor`, `baseline`, `box`, `leader`.
 
 ### `leaderGeometry({ anchor, symbol?, box, style?, symbolGap?, minGap? }): Point[] | null`
 
@@ -230,7 +237,8 @@ Costs are in position-rank units: the n-th preferred position costs n.
 3. **Greedy pass**: by mode then priority, each label takes its first free candidate. Placed labels and their leaders go in a uniform grid.
 4. **Ejection chains**: a hidden label takes a candidate if the one or two labels in its way can move to free spots, directly or by pushing one more label. A label that cannot move is hidden only if it ranks lower.
 5. **Polish**: each label moves to its best-ranked free candidate.
-6. **Columns** (with `align: 'columns'`): dense clusters are stacked in columns, positions solved by isotonic regression (pool adjacent violators) around the anchors' heights, or in rows above or below them, staggered so that vertical leaders run clear. Callouts use the same stacking along the edges, before the greedy pass.
+6. **Groups** (with `groups`): a group with a member left hidden is named by its block instead, pushing aside lower labels if need be; hidden labels then fill the room left.
+7. **Columns** (with `align: 'columns'`): dense clusters are stacked in columns, positions solved by isotonic regression (pool adjacent violators) around the anchors' heights, or in rows above or below them, staggered so that vertical leaders run clear. Callouts use the same stacking along the edges, before the greedy pass.
 
 ### Approach
 
@@ -265,7 +273,6 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 
 - An exact boundary labeling (minimal total leader length without crossings).
 - Columns on a world map: Central and Eastern Europe still lack room (Russia, Ukraine and Turkey fill the east); leaders routed around labels rather than taking them along.
-- Group labels: one block listing a group too dense to name one by one ("Caraïbes, du Nord au Sud : …").
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.
 - A demo page rendering the same placement with SVG, Canvas and deck.gl.
