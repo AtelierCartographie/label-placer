@@ -1102,6 +1102,7 @@ export class Placer {
           box: null,
           leader: null,
           overlapping: false,
+          blocked: l.width > 0 && l.height > 0 && this.absorbed[i] < 0 && !this.feasible[i].length && !this.farther[i].length,
           group: this.absorbed[i] >= 0 ? this.absorbed[i] : null
         };
       const [x, y] = this.textPoint(c);
@@ -1120,6 +1121,7 @@ export class Placer {
         box: [c.x0, c.y0, c.x1, c.y1],
         leader: c.leader,
         overlapping: this.forced.has(i) || (this.fixed(i) && this.conflicts(i, c, 1, false).length > 0) || this.outOfBounds(c),
+        blocked: false,
         group: null
       };
     });
@@ -1131,6 +1133,7 @@ export class Placer {
         placed,
         hidden: labels.length - placed,
         overlapping: labels.filter((l) => l.overlapping).length,
+        blocked: labels.filter((l) => l.blocked).length,
         work: this.work,
         timings
       }

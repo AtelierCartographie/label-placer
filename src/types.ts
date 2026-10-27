@@ -209,6 +209,12 @@ export interface PlacedLabel {
   leader: Point[] | null;
   /** A required or pinned label that could not avoid a conflict. */
   overlapping: boolean;
+  /**
+   * A hidden label every candidate of which falls on a static obstacle or out of bounds: no
+   * other label stood in its way. Look at the obstacles, the bounds or its size, not at the
+   * priorities.
+   */
+  blocked: boolean;
   /** Index of the group whose block names this label instead, or null. */
   group: number | null;
 }
@@ -234,6 +240,8 @@ export interface PlacementStats {
   placed: number;
   hidden: number;
   overlapping: number;
+  /** Hidden labels with no spot clear of the static obstacles and the bounds (see `PlacedLabel.blocked`). */
+  blocked: number;
   /** Candidate tests spent by the optimizer. */
   work: number;
   timings: { setup: number; greedy: number; optimize: number };

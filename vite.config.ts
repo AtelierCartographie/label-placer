@@ -4,9 +4,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   build: {
     lib: {
-      entry: resolve(import.meta.dirname, 'src/index.ts'),
-      name: 'LabelPlacer',
-      fileName: 'label-placer',
+      entry: { 'label-placer': resolve(import.meta.dirname, 'src/index.ts'), plot: resolve(import.meta.dirname, 'src/plot.ts') },
+      fileName: (format, name) => `${name}.${format === 'es' ? 'js' : 'cjs'}`,
       formats: ['es', 'cjs']
     }
   },

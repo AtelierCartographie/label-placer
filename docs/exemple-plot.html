@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>label-placer et Observable Plot</title>
+<meta name="description" content="Une carte faite en code avec Observable Plot, ses noms placés par label-placer : placeText() comme render d'un Plot.text, et ce qu'il reste à revoir.">
+<style>
+:root {
+  --paper: #f3f6f7; --surface: #ffffff; --ink: #15202b; --ink-2: #4b5967; --rule: #d3dbe1;
+  --accent: #1c5ea8; --symbol: #e09b35; --land: #e6ebef; --sea: #ffffff; --code-bg: #e9eef2;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10161b; --surface: #172028; --ink: #e3e9ee; --ink-2: #a3afba; --rule: #2b3843;
+    --accent: #7db0ec; --symbol: #d3923a; --land: #24313b; --sea: #121a21; --code-bg: #1c2731;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #10161b; --surface: #172028; --ink: #e3e9ee; --ink-2: #a3afba; --rule: #2b3843;
+  --accent: #7db0ec; --symbol: #d3923a; --land: #24313b; --sea: #121a21; --code-bg: #1c2731;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--font-ui); padding: 0 16px 4rem; }
+.wrap { max-width: 1080px; margin: 0 auto; }
+.prose { max-width: 68ch; }
+h1 { font-size: clamp(1.7rem, 1.2rem + 2vw, 2.4rem); line-height: 1.15; margin: 2.4rem 0 .6rem; text-wrap: balance; }
+h2 { font-size: 1.4rem; margin: 2rem 0 .6rem; }
+a { color: var(--accent); }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: .08em .35em; border-radius: 4px; }
+pre { background: var(--code-bg); padding: .9rem 1rem; border-radius: 6px; overflow-x: auto; font-size: .85rem; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: .5rem 1.4rem; align-items: center; margin: 1rem 0 .6rem; font-size: .92rem; }
+.controls label { display: inline-flex; gap: .4rem; align-items: center; }
+.out { font-family: var(--font-mono); font-size: .85rem; color: var(--ink-2); }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 8px; overflow-x: auto; }
+.panel svg { display: block; width: 100%; height: auto; min-width: 560px; }
+figcaption { color: var(--ink-2); font-size: .88rem; margin-top: .5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<p><a href="comment-ca-marche.html">← Comment label-placer place les noms</a></p>
+<h1>Une carte faite en code, avec Observable Plot</h1>
+<div class="prose">
+<p>Les 50 pays d'Europe en cercles proportionnels à leur population, tracés par <a href="https://observablehq.com/plot/">Observable Plot</a>. Plot projette et dessine ; label-placer place les noms. L'adaptateur <code>placeText()</code> se branche sur l'option <code>render</code> d'un <code>Plot.text</code> : il lit les positions projetées et les rayons des cercles, mesure les noms, les place et dessine les filets. Plot n'est pas une dépendance du paquet.</p>
+<p>Une carte faite en code se relit et se reprend. Le moteur est déterministe, et la case « Montrer ce qu'il reste à revoir » marque en rouge les noms en chevauchement, d'une croix les noms masqués faute de place hors des obstacles (<code>blocked</code> : voir les obstacles, le cadre ou la taille), d'un cercle ceux dont d'autres noms ont pris la place (voir les priorités, l'espacement, la taille du texte). Survolez une marque pour lire le nom.</p>
+</div>
+<div class="controls">
+  <label><input type="checkbox" id="req"> Tout nommer (<code>required: true</code>)</label>
+  <label><input type="checkbox" id="land" checked> Terres en obstacle doux (<code>land</code>)</label>
+  <label>Espace <input type="range" id="sp" min="0" max="8" step="1" value="3"><span class="out" id="sp-out"></span></label>
+  <label>Texte <input type="range" id="fs" min="8" max="14" step="1" value="11"><span class="out" id="fs-out"></span></label>
+  <label><input type="checkbox" id="dbg" checked> Montrer ce qu'il reste à revoir (<code>debug</code>)</label>
+</div>
+<p class="out" id="stats" aria-live="polite">Chargement de Plot et des terres…</p>
+<figure style="margin:0">
+  <div class="panel" id="chart"></div>
+  <figcaption>Données : Banque mondiale, population 2023 ; Natural Earth 1:110m (world-atlas). Projection azimutale équivalente de Lambert centrée sur l'Europe.</figcaption>
+</figure>
+<h2>Le code</h2>
+<pre><code id="code"></code></pre>
+<div class="prose">
+<p>Le canal <code>r</code> passe par l'échelle <code>r</code> de Plot, comme pour <code>Plot.dot</code> : le moteur connaît le rayon de chaque cercle. Sans canal <code>priority</code>, les plus gros cercles passent d'abord. <code>land</code> est projeté avec la projection du graphique : les noms préfèrent la mer, sans s'interdire la terre. Les autres options sont celles de <code>placeLabels</code> (<code>spacing</code>, <code>leader</code>, <code>positions</code>, <code>previous</code>...), en pixels. <code>onPlace</code> reçoit le résultat : gardez-le comme <code>previous</code> du rendu suivant, pour que les noms bougent le moins possible quand les données changent.</p>
+</div>
+</div>
+<script type="module">
+import * as Plot from 'https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm';
+import * as topojson from 'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/+esm';
+import { placeText } from './lib/plot.js';
+
+// [nom, population 2023, longitude, latitude d'un point intérieur], de scripts/demo-data.ts.
+const rows = [["Islande",393349,-19.05,64.73],["Norvège",5519594,8.6,61.19],["Suède",10536632,17.59,65.01],["Finlande",5583911,25.96,62.48],["Danemark",5946952,9.29,56.42],["Estonie",1370286,25.8,58.76],["Lettonie",1877445,26.38,56.69],["Lituanie",2871585,24.19,55.33],["Irlande",5307600,-7.8,53.19],["Royaume-Uni",68350000,-1.49,52.12],["Pays-Bas",17877117,5.63,52.55],["Belgique",11787423,4.65,50.67],["Luxembourg",666430,5.95,49.62],["France",68287487,2.25,47.42],["Allemagne",83280000,10.26,51.91],["Pologne",36687353,19.49,52.26],["Tchéquie",10864042,14.57,49.97],["Slovaquie",5426740,19.01,48.79],["Autriche",9131761,14.48,47.55],["Suisse",8888093,7.87,46.86],["Espagne",48347910,-3.62,39.51],["Portugal",10578174,-8.38,39.08],["Italie",58993475,10.48,45.11],["Slovénie",2120461,15.11,46.14],["Croatie",3859686,16.59,45.82],["Bosnie-Herzégovine",3185073,17.95,44.18],["Serbie",6623183,20.75,44.12],["Monténégro",616177,19.24,42.91],["Kosovo",1756366,20.91,42.55],["Macédoine du Nord",1827816,21.41,41.53],["Albanie",2745972,20.04,40.69],["Grèce",10405588,21.6,39.49],["Bulgarie",6446596,25,42.61],["Roumanie",19059479,24.98,45.75],["Moldavie",2457783,28.26,47.63],["Ukraine",37732836,32.91,48.87],["Biélorussie",9178298,28.22,53.42],["Hongrie",9592186,19.85,47.17],["Malte",552747,14.42,35.9],["Chypre",1344976,32.94,34.85],["Russie",143826130,50.34,58.77],["Turquie",85325965,33.88,39.4],["Géorgie",3715483,42.71,42.31],["Arménie",2990900,44.58,40.57],["Azerbaïdjan",10153958,47.19,40.33],["Andorre",80856,1.52,42.51],["Monaco",38956,7.42,43.74],["Liechtenstein",39850,9.55,47.16],["Saint-Marin",33860,12.45,43.94],["Vatican",764,12.46,41.9]];
+const countries = rows.map(([name, population, lon, lat]) => ({ name, population, lon, lat }));
+const world = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json').then((r) => r.json());
+const land = topojson.feature(world, world.objects.land);
+const borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
+const $ = (id) => document.getElementById(id);
+
+function chart() {
+  const fontSize = +$('fs').value;
+  const spacing = +$('sp').value;
+  let result;
+  const options = { spacing, required: $('req').checked, land: $('land').checked ? land : undefined, debug: $('dbg').checked, onPlace: (r) => (result = r) };
+  const plot = Plot.plot({
+    width: 1000,
+    height: 760,
+    projection: { type: 'azimuthal-equal-area', rotate: [-12, -53], domain: { type: 'MultiPoint', coordinates: [[-22, 63], [45, 66], [-9, 36], [36, 35]] } },
+    r: { range: [0, 26] },
+    style: { background: 'var(--sea)' },
+    marks: [
+      Plot.geo(land, { fill: 'var(--land)' }),
+      Plot.geo(borders, { stroke: 'var(--surface)', strokeWidth: 0.8 }),
+      Plot.dot(countries, { x: 'lon', y: 'lat', r: 'population', fill: 'var(--symbol)', fillOpacity: 0.85 }),
+      Plot.text(countries, {
+        x: 'lon', y: 'lat', text: 'name', fontSize, fill: 'currentColor',
+        stroke: 'var(--sea)', strokeWidth: 2.5, paintOrder: 'stroke',
+        channels: { r: { value: 'population', scale: 'r' } },
+        render: placeText(options)
+      })
+    ]
+  });
+  $('chart').replaceChildren(plot);
+  const s = result.stats;
+  $('stats').textContent = s.placed + ' noms placés sur ' + result.labels.length + ' dans le cadre · ' + result.labels.filter((p) => p.leader).length + ' filets'
+    + (s.hidden ? ' · ' + s.hidden + ' masqués, dont ' + s.blocked + ' sans place hors des obstacles' : '')
+    + (s.overlapping ? ' · ' + s.overlapping + ' en chevauchement' : '');
+  $('sp-out').textContent = spacing + ' px';
+  $('fs-out').textContent = fontSize + ' px';
+  const opts = ['spacing: ' + spacing, ...(options.required ? ['required: true'] : []), ...(options.land ? ['land'] : []), ...(options.debug ? ['debug: true'] : [])].join(', ');
+  $('code').textContent = [
+    "import { placeText } from '@ateliercartographie/label-placer/plot';",
+    '',
+    'Plot.plot({',
+    "  projection: { type: 'azimuthal-equal-area', rotate: [-12, -53], domain },",
+    '  r: { range: [0, 26] },',
+    '  marks: [',
+    "    Plot.geo(land, { fill: '#e6ebef' }),",
+    "    Plot.dot(countries, { x: 'lon', y: 'lat', r: 'population' }),",
+    '    Plot.text(countries, {',
+    "      x: 'lon', y: 'lat', text: 'name', fontSize: " + fontSize + ',',
+    "      stroke: 'white', paintOrder: 'stroke',",
+    "      channels: { r: { value: 'population', scale: 'r' } },",
+    '      render: placeText({ ' + opts + ' })',
+    '    })',
+    '  ]',
+    '})'
+  ].join('\n');
+}
+for (const id of ['req', 'land', 'sp', 'fs', 'dbg']) $(id).addEventListener('input', chart);
+chart();
+</script>
+</body>
+</html>

@@ -154,7 +154,7 @@ The same engine serves maps with opposite aims; the options set the aim.
 
 **A blank base map with every name** (France by départements, Europe by countries): all labels `required`, nothing hidden. Offer the layouts a cartographer would use when a name does not fit: two lines, then an abbreviation or a number at a cost above the spots next to the feature and below any leader (8, plus its rank and length): `cost: 10` sets a number only where a leader looms, as in an atlas. On the 96 départements of an A4 page at 10 px, 27 leaders give way to 21 numbers and 6 leaders. A `required` label with no free spot left, even after the ejection chains, tries leader rings farther out (up to 11 label heights beyond the last one, out of the other areas, so at sea) before it overlaps. `result.stats.overlapping` tells whether the page is too small for the text size. On the 50 countries of Europe (Natural Earth 1:110m, A4 page), names alone leave 1 to 4 overlaps from 8 to 12 px, all in the Balkans; with ISO codes as a last layout at cost 10, none from 8 to 10 px: a dozen codes, from Belgium to the Caucasus, for a key beside the map.
 
-**A map made in code** (Observable Plot, R, Mapshaper, a script): the result is read, adjusted and run again. `placeLabels` is deterministic under its work budget, so a change in the data or the options is the only change in the result. Pin what you settled with `mode: 'pinned'` and `offset` (taken from a previous result), pass `previous` to keep the rest where it was, and read `overlapping`, `visible: false` and `ring > 0` to find the labels left to look at.
+**A map made in code** (Observable Plot, R, Mapshaper, a script): the result is read, adjusted and run again. `placeLabels` is deterministic under its work budget, so a change in the data or the options is the only change in the result. Pin what you settled with `mode: 'pinned'` and `offset` (taken from a previous result), pass `previous` to keep the rest where it was, and read the result to find the labels left to look at: `overlapping`, `ring > 0`, and the hidden ones, `blocked` when every spot falls on a static obstacle or out of bounds (look at the obstacles, the bounds or the size), crowded out by other labels otherwise (look at the priorities, the spacing, the text size). With Observable Plot, `placeText` does all this in a text mark (see Rendering), and `debug: true` marks these labels on the map.
 
 ## Rendering
 
@@ -203,6 +203,27 @@ new TextLayer({
 });
 ```
 
+**Observable Plot**: `placeText()`, from `@ateliercartographie/label-placer/plot`, is a `render` function for `Plot.text`. It reads the projected positions, the circles' radii through Plot's `r` scale (a custom `r` channel) and an optional `priority` channel (else the radius), measures the texts with the mark's font, places them and draws the leaders. Plot is not a dependency.
+
+```js
+import { placeText } from '@ateliercartographie/label-placer/plot';
+
+Plot.plot({
+  projection: { type: 'azimuthal-equal-area', rotate: [-12, -53], domain },
+  marks: [
+    Plot.geo(land),
+    Plot.dot(countries, { x: 'lon', y: 'lat', r: 'population' }),
+    Plot.text(countries, {
+      x: 'lon', y: 'lat', text: 'name', stroke: 'white', paintOrder: 'stroke',
+      channels: { r: { value: 'population', scale: 'r' } },
+      render: placeText({ spacing: 3, land, debug: true })
+    })
+  ]
+});
+```
+
+Its options are those of `placeLabels` in pixels, without `bounds` (the plot's frame), plus `land` (GeoJSON, projected: names prefer the sea), `obstacles` (in pixels, or a function of `project(lon, lat)`), `r` (the radius without an `r` channel, 3 for Plot's default dots), `required`, `lineHeight`, `onPlace(result)` (keep it as the next `previous`) and `debug`: overlapping labels in red, a red cross at the anchor of a `blocked` label, a red ring where other labels took the room. Single-line texts only. `docs/exemple-plot.html` runs it on the countries of Europe.
+
 **MapLibre**: write the result as GeoJSON properties and turn MapLibre's own collision off (`text-allow-overlap` and `text-ignore-placement`), so it does not place the labels again. `text-anchor` names the side of the text at the anchor: a `top-right` placement is `text-anchor: bottom-left`. Leaders go in a `line` layer after `map.unproject`.
 
 ## API
@@ -234,7 +255,9 @@ new TextLayer({
 
 Costs are in position-rank units: the n-th preferred position costs n.
 
-`PlacedLabel`: `index`, `id`, `visible`, `placement`, `ring`, `layout`, `x`, `y`, `textAnchor`, `baseline`, `offset`, `box`, `leader`, `overlapping`, `group`.
+`PlacedLabel`: `index`, `id`, `visible`, `placement`, `ring`, `layout`, `x`, `y`, `textAnchor`, `baseline`, `offset`, `box`, `leader`, `overlapping`, `blocked` (hidden with no spot clear of the static obstacles and the bounds), `group`.
+
+`result.stats`: `placed`, `hidden`, `overlapping`, `blocked`, `work`, `timings`.
 
 `PlacedGroup` (in `result.groups`): `index`, `id`, `visible`, `members`, `placement`, `ring`, `layout`, `x`, `y`, `textAnchor`, `baseline`, `box`, `leader`.
 
@@ -260,7 +283,7 @@ Algorithmic inspirations, none of whose code is reused: Christensen, Marks & Shi
 
 ## Demo
 
-`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie`, `?zone=monde` or `?zone=departements` switches its data from Bretagne to the communes of Normandie, the countries of the world (Equal Earth) or the 96 départements of metropolitan France, named inside their outline or outside, on one or two lines, with the outline of France as a line obstacle. A slider sets the share of names to place, the most important first.
+`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie`, `?zone=monde`, `?zone=departements` or `?zone=europe` switches its data from Bretagne to the communes of Normandie, the countries of the world (Equal Earth), the 96 départements of metropolitan France, named inside their outline or outside, on one or two lines, with the outline of France as a line obstacle, or the countries of Europe as a blank base map where every name is required. `docs/exemple-plot.html` is a map made with Observable Plot, through `placeText` (it loads the build copied in `docs/lib`). A slider sets the share of names to place, the most important first.
 
 ## Benchmark
 

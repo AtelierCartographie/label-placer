@@ -11,6 +11,11 @@
       "types": "./dist/src/index.d.ts",
       "import": "./dist/label-placer.js",
       "require": "./dist/label-placer.cjs"
+    },
+    "./plot": {
+      "types": "./dist/src/plot.d.ts",
+      "import": "./dist/plot.js",
+      "require": "./dist/plot.cjs"
     }
   },
   "files": [
