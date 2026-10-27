@@ -44,5 +44,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Demo: Europe by country (`?zone=europe`), a blank base map where every name is required, the microstates as points, ISO codes as a last layout, a dot at the inner end of the leaders into areas
 - `PlacedLabel.blocked` and `stats.blocked`: a hidden label with no spot clear of the static obstacles and the bounds, told from one crowded out by other labels
 - `placeText()` (`@ateliercartographie/label-placer/plot`): an Observable Plot `render` function for text marks, with the land as GeoJSON, `onPlace` and a `debug` view of the labels left to look at
-- Demo: `docs/exemple-plot.html`, the countries of Europe drawn with Observable Plot
+- Demo: `docs/exemple-plot.html`, the countries of Europe and a Gapminder scatterplot drawn with Observable Plot, each against Plot alone, at the width of the page, the scatterplot by year with `previous`
 - Benchmark on French communes

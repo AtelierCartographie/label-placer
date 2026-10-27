@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>label-placer et Observable Plot</title>
-<meta name="description" content="Une carte faite en code avec Observable Plot, ses noms placés par label-placer : placeText() comme render d'un Plot.text, et ce qu'il reste à revoir.">
+<meta name="description" content="Une carte et un nuage de points faits avec Observable Plot, leurs noms placés par label-placer et comparés à Plot seul : placeText() comme render d'un Plot.text.">
 <style>
 :root {
   --paper: #f3f6f7; --surface: #ffffff; --ink: #15202b; --ink-2: #4b5967; --rule: #d3dbe1;
@@ -38,35 +38,69 @@ pre code { background: none; padding: 0; }
 .controls { display: flex; flex-wrap: wrap; gap: .5rem 1.4rem; align-items: center; margin: 1rem 0 .6rem; font-size: .92rem; }
 .controls label { display: inline-flex; gap: .4rem; align-items: center; }
 .out { font-family: var(--font-mono); font-size: .85rem; color: var(--ink-2); }
-.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 8px; overflow-x: auto; }
-.panel svg { display: block; width: 100%; height: auto; min-width: 560px; }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 8px; }
+.panel svg { display: block; max-width: 100%; height: auto; }
+.panel figure { margin: 0; }
+.seg { display: inline-flex; }
+.btn { font: inherit; font-size: .88rem; padding: .25rem .7rem; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; }
+.btn + .btn { border-left: 0; }
+.btn:first-child { border-radius: 6px 0 0 6px; }
+.btn:last-child { border-radius: 0 6px 6px 0; }
+.btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+details { margin: .6rem 0 0; }
+summary { cursor: pointer; color: var(--accent); font-size: .92rem; }
 figcaption { color: var(--ink-2); font-size: .88rem; margin-top: .5rem; }
 </style>
 </head>
 <body>
 <div class="wrap">
 <p><a href="comment-ca-marche.html">← Comment label-placer place les noms</a></p>
-<h1>Une carte faite en code, avec Observable Plot</h1>
+<h1>label-placer avec Observable Plot</h1>
 <div class="prose">
-<p>Les 50 pays d'Europe en cercles proportionnels à leur population, tracés par <a href="https://observablehq.com/plot/">Observable Plot</a>. Plot projette et dessine ; label-placer place les noms. L'adaptateur <code>placeText()</code> se branche sur l'option <code>render</code> d'un <code>Plot.text</code> : il lit les positions projetées et les rayons des cercles, mesure les noms, les place et dessine les filets. Plot n'est pas une dépendance du paquet.</p>
-<p>Une carte faite en code se relit et se reprend. Le moteur est déterministe, et la case « Montrer ce qu'il reste à revoir » marque en rouge les noms en chevauchement, d'une croix les noms masqués faute de place hors des obstacles (<code>blocked</code> : voir les obstacles, le cadre ou la taille), d'un cercle ceux dont d'autres noms ont pris la place (voir les priorités, l'espacement, la taille du texte). Survolez une marque pour lire le nom.</p>
+<p>Deux graphiques faits en code avec <a href="https://observablehq.com/plot/">Observable Plot</a> : une carte et un nuage de points. Plot projette, met à l'échelle et dessine ; label-placer place les noms. L'adaptateur <code>placeText()</code> se branche sur l'option <code>render</code> d'un <code>Plot.text</code> : il lit les positions et les rayons des cercles, mesure les noms, les place et dessine les filets. Plot n'est pas une dépendance du paquet.</p>
+<p>Chaque graphique se compare à <strong>Plot seul</strong>, chaque nom écrit à droite de son cercle comme on le fait d'ordinaire. Les graphiques prennent la largeur de la page : réduisez la fenêtre, ou la largeur ci-dessous, et le texte garde sa taille pendant que la place manque ; le moteur garde alors les noms les plus importants. La case « Montrer ce qu'il reste à revoir » marque en rouge les noms en chevauchement, d'une croix les noms masqués faute de place hors des obstacles (<code>blocked</code> : voir les obstacles, le cadre ou la taille), d'un cercle ceux dont d'autres noms ont pris la place (voir les priorités, l'espacement, la taille du texte). Survolez une marque pour lire le nom.</p>
 </div>
 <div class="controls">
-  <label><input type="checkbox" id="req"> Tout nommer (<code>required: true</code>)</label>
-  <label><input type="checkbox" id="land" checked> Terres en obstacle doux (<code>land</code>)</label>
-  <label>Espace <input type="range" id="sp" min="0" max="8" step="1" value="3"><span class="out" id="sp-out"></span></label>
-  <label>Texte <input type="range" id="fs" min="8" max="14" step="1" value="11"><span class="out" id="fs-out"></span></label>
-  <label><input type="checkbox" id="dbg" checked> Montrer ce qu'il reste à revoir (<code>debug</code>)</label>
+  <label>Largeur des graphiques <input type="range" id="w" min="320" max="1000" step="10" value="1000"><span class="out" id="w-out"></span></label>
 </div>
-<p class="out" id="stats" aria-live="polite">Chargement de Plot et des terres…</p>
+
+<h2 id="carte">Une carte : les pays d'Europe</h2>
+<div class="prose"><p>Les 50 pays d'Europe en cercles proportionnels à leur population. Les terres sont un obstacle doux : un nom préfère la mer, sans s'interdire la terre.</p></div>
+<div class="controls">
+  <span class="seg" role="group" aria-label="Rendu de la carte"><button class="btn" type="button" id="m-plot" aria-pressed="false">Plot seul</button><button class="btn" type="button" id="m-lp" aria-pressed="true">Avec label-placer</button></span>
+  <label><input type="checkbox" id="m-req"> Tout nommer (<code>required</code>)</label>
+  <label><input type="checkbox" id="m-land" checked> Terres en obstacle (<code>land</code>)</label>
+  <label>Espace <input type="range" id="m-sp" min="0" max="8" step="1" value="3"><span class="out" id="m-sp-out"></span></label>
+  <label>Texte <input type="range" id="m-fs" min="8" max="14" step="1" value="11"><span class="out" id="m-fs-out"></span></label>
+  <label><input type="checkbox" id="m-dbg" checked> Montrer ce qu'il reste à revoir (<code>debug</code>)</label>
+</div>
+<p class="out" id="m-stats" aria-live="polite">Chargement de Plot et des terres…</p>
 <figure style="margin:0">
-  <div class="panel" id="chart"></div>
+  <div class="panel" id="m-chart"></div>
   <figcaption>Données : Banque mondiale, population 2023 ; Natural Earth 1:110m (world-atlas). Projection azimutale équivalente de Lambert centrée sur l'Europe.</figcaption>
 </figure>
-<h2>Le code</h2>
-<pre><code id="code"></code></pre>
+<details><summary>Le code</summary><pre><code id="m-code"></code></pre></details>
+
+<h2 id="nuage">Un nuage de points : fécondité et espérance de vie</h2>
+<div class="prose"><p>Les 63 pays du jeu Gapminder : enfants par femme en abscisse, espérance de vie en ordonnée, cercles proportionnels à la population, une couleur par région. Les pays se serrent en haut à gauche, où la fécondité a baissé et l'espérance de vie monté : les noms s'y disputent la place, et les cercles de la Chine et de l'Inde en couvrent d'autres. Sans projection, l'adaptateur lit les positions des échelles <code>x</code> et <code>y</code> ; le cadre du graphique, marges et axes exclus, borne les noms.</p>
+<p>Le curseur d'année rejoue le graphique de 1955 à 2005. <code>onPlace</code> garde chaque résultat et le passe en <code>previous</code> au rendu suivant : un nom reste où il était tant que sa place est libre, au lieu de sauter d'un côté à l'autre de son cercle.</p></div>
+<div class="controls">
+  <span class="seg" role="group" aria-label="Rendu du nuage"><button class="btn" type="button" id="s-plot" aria-pressed="false">Plot seul</button><button class="btn" type="button" id="s-lp" aria-pressed="true">Avec label-placer</button></span>
+  <label>Année <input type="range" id="s-year" min="1955" max="2005" step="5" value="2005"><span class="out" id="s-year-out"></span></label>
+  <label><input type="checkbox" id="s-prev" checked> Garder les places d'une année à l'autre (<code>previous</code>)</label>
+  <label>Espace <input type="range" id="s-sp" min="0" max="8" step="1" value="2"><span class="out" id="s-sp-out"></span></label>
+  <label><input type="checkbox" id="s-dbg"> Montrer ce qu'il reste à revoir (<code>debug</code>)</label>
+</div>
+<p class="out" id="s-stats" aria-live="polite">Chargement des données…</p>
+<figure style="margin:0">
+  <div class="panel" id="s-chart"></div>
+  <figcaption>Données : Gapminder, par les vega-datasets ; régions du jeu de données.</figcaption>
+</figure>
+<details><summary>Le code</summary><pre><code id="s-code"></code></pre></details>
+
+<h2>Les options</h2>
 <div class="prose">
-<p>Le canal <code>r</code> passe par l'échelle <code>r</code> de Plot, comme pour <code>Plot.dot</code> : le moteur connaît le rayon de chaque cercle. Sans canal <code>priority</code>, les plus gros cercles passent d'abord. <code>land</code> est projeté avec la projection du graphique : les noms préfèrent la mer, sans s'interdire la terre. Les autres options sont celles de <code>placeLabels</code> (<code>spacing</code>, <code>leader</code>, <code>positions</code>, <code>previous</code>...), en pixels. <code>onPlace</code> reçoit le résultat : gardez-le comme <code>previous</code> du rendu suivant, pour que les noms bougent le moins possible quand les données changent.</p>
+<p>Le canal <code>r</code> passe par l'échelle <code>r</code> de Plot, comme pour <code>Plot.dot</code> : le moteur connaît le rayon de chaque cercle. Sans canal <code>priority</code>, les plus gros cercles passent d'abord. <code>land</code> est projeté avec la projection du graphique. Les autres options sont celles de <code>placeLabels</code> (<code>spacing</code>, <code>leader</code>, <code>positions</code>, <code>previous</code>...), en pixels. <code>onPlace</code> reçoit le résultat : gardez-le comme <code>previous</code> du rendu suivant pour que les noms bougent le moins possible quand les données changent.</p>
 </div>
 </div>
 <!-- The engine and its Plot adapter, built from src/plot.ts (esbuild --format=iife --global-name=LabelPlacerPlot). -->
@@ -77,52 +111,100 @@ figcaption { color: var(--ink-2); font-size: .88rem; margin-top: .5rem; }
 import * as Plot from 'https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm';
 import * as topojson from 'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/+esm';
 const { placeText } = window.LabelPlacerPlot;
+const $ = (id) => document.getElementById(id);
+const fmt = new Intl.NumberFormat('fr-FR');
 
+// ---------- Width: the charts follow the page, or the slider below it ----------
+const wrap = document.querySelector('.wrap');
+const widthIn = $('w');
+let userWidth = null;
+// The panel's inner width: the wrap minus its border and padding.
+const available = () => Math.max(320, Math.floor(wrap.clientWidth - 18));
+function chartWidth() {
+  const max = Math.min(1000, available());
+  widthIn.max = max;
+  const w = Math.min(userWidth ?? max, max);
+  widthIn.value = w;
+  $('w-out').textContent = w + ' px';
+  return w;
+}
+widthIn.addEventListener('input', () => {
+  userWidth = +widthIn.value;
+  renderAll();
+});
+let pending = false;
+new ResizeObserver(() => {
+  if (pending) return;
+  pending = true;
+  requestAnimationFrame(() => {
+    pending = false;
+    renderAll();
+  });
+}).observe(wrap);
+
+/** A two-button switch between Plot alone and label-placer. */
+function modeSwitch(prefix, onChange) {
+  let mode = 'lp';
+  const set = (m) => {
+    mode = m;
+    $(prefix + '-plot').setAttribute('aria-pressed', String(m === 'plot'));
+    $(prefix + '-lp').setAttribute('aria-pressed', String(m === 'lp'));
+    onChange();
+  };
+  $(prefix + '-plot').addEventListener('click', () => set('plot'));
+  $(prefix + '-lp').addEventListener('click', () => set('lp'));
+  return () => mode;
+}
+
+function stats(result, total) {
+  const s = result.stats;
+  return s.placed + ' noms placés sur ' + total + ' · ' + result.labels.filter((p) => p.leader).length + ' filets'
+    + (s.hidden ? ' · ' + s.hidden + ' masqués, dont ' + s.blocked + ' sans place hors des obstacles' : '')
+    + (s.overlapping ? ' · ' + s.overlapping + ' en chevauchement' : '');
+}
+
+// ---------- The map ----------
 // [nom, population 2023, longitude, latitude d'un point intérieur], de scripts/demo-data.ts.
 const rows = [["Islande",393349,-19.05,64.73],["Norvège",5519594,8.6,61.19],["Suède",10536632,17.59,65.01],["Finlande",5583911,25.96,62.48],["Danemark",5946952,9.29,56.42],["Estonie",1370286,25.8,58.76],["Lettonie",1877445,26.38,56.69],["Lituanie",2871585,24.19,55.33],["Irlande",5307600,-7.8,53.19],["Royaume-Uni",68350000,-1.49,52.12],["Pays-Bas",17877117,5.63,52.55],["Belgique",11787423,4.65,50.67],["Luxembourg",666430,5.95,49.62],["France",68287487,2.25,47.42],["Allemagne",83280000,10.26,51.91],["Pologne",36687353,19.49,52.26],["Tchéquie",10864042,14.57,49.97],["Slovaquie",5426740,19.01,48.79],["Autriche",9131761,14.48,47.55],["Suisse",8888093,7.87,46.86],["Espagne",48347910,-3.62,39.51],["Portugal",10578174,-8.38,39.08],["Italie",58993475,10.48,45.11],["Slovénie",2120461,15.11,46.14],["Croatie",3859686,16.59,45.82],["Bosnie-Herzégovine",3185073,17.95,44.18],["Serbie",6623183,20.75,44.12],["Monténégro",616177,19.24,42.91],["Kosovo",1756366,20.91,42.55],["Macédoine du Nord",1827816,21.41,41.53],["Albanie",2745972,20.04,40.69],["Grèce",10405588,21.6,39.49],["Bulgarie",6446596,25,42.61],["Roumanie",19059479,24.98,45.75],["Moldavie",2457783,28.26,47.63],["Ukraine",37732836,32.91,48.87],["Biélorussie",9178298,28.22,53.42],["Hongrie",9592186,19.85,47.17],["Malte",552747,14.42,35.9],["Chypre",1344976,32.94,34.85],["Russie",143826130,50.34,58.77],["Turquie",85325965,33.88,39.4],["Géorgie",3715483,42.71,42.31],["Arménie",2990900,44.58,40.57],["Azerbaïdjan",10153958,47.19,40.33],["Andorre",80856,1.52,42.51],["Monaco",38956,7.42,43.74],["Liechtenstein",39850,9.55,47.16],["Saint-Marin",33860,12.45,43.94],["Vatican",764,12.46,41.9]];
 const countries = rows.map(([name, population, lon, lat]) => ({ name, population, lon, lat }));
 const world = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json').then((r) => r.json());
 const land = topojson.feature(world, world.objects.land);
 const borders = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
-const $ = (id) => document.getElementById(id);
+const mapMode = modeSwitch('m', () => renderMap());
 
-function chart() {
-  const fontSize = +$('fs').value;
-  const spacing = +$('sp').value;
-  let result;
-  const options = { spacing, required: $('req').checked, land: $('land').checked ? land : undefined, debug: $('dbg').checked, onPlace: (r) => (result = r) };
+function renderMap() {
+  const width = chartWidth();
+  const fontSize = +$('m-fs').value;
+  const spacing = +$('m-sp').value;
+  let result = null;
+  const options = { spacing, required: $('m-req').checked, land: $('m-land').checked ? land : undefined, debug: $('m-dbg').checked, onPlace: (r) => (result = r) };
+  const text = { x: 'lon', y: 'lat', text: 'name', fontSize, fill: 'currentColor', stroke: 'var(--sea)', strokeWidth: 2.5, paintOrder: 'stroke' };
   const plot = Plot.plot({
-    width: 1000,
-    height: 760,
+    width,
+    height: Math.round(width * 0.76),
     projection: { type: 'azimuthal-equal-area', rotate: [-12, -53], domain: { type: 'MultiPoint', coordinates: [[-22, 63], [45, 66], [-9, 36], [36, 35]] } },
-    r: { range: [0, 26] },
+    r: { range: [0, 26 * Math.min(1, width / 1000)] },
     style: { background: 'var(--sea)' },
     marks: [
       Plot.geo(land, { fill: 'var(--land)' }),
       Plot.geo(borders, { stroke: 'var(--surface)', strokeWidth: 0.8 }),
       Plot.dot(countries, { x: 'lon', y: 'lat', r: 'population', fill: 'var(--symbol)', fillOpacity: 0.85 }),
-      Plot.text(countries, {
-        x: 'lon', y: 'lat', text: 'name', fontSize, fill: 'currentColor',
-        stroke: 'var(--sea)', strokeWidth: 2.5, paintOrder: 'stroke',
-        channels: { r: { value: 'population', scale: 'r' } },
-        render: placeText(options)
-      })
+      mapMode() === 'plot'
+        ? Plot.text(countries, { ...text, textAnchor: 'start', dx: 4 })
+        : Plot.text(countries, { ...text, channels: { r: { value: 'population', scale: 'r' } }, render: placeText(options) })
     ]
   });
-  $('chart').replaceChildren(plot);
-  const s = result.stats;
-  $('stats').textContent = s.placed + ' noms placés sur ' + result.labels.length + ' dans le cadre · ' + result.labels.filter((p) => p.leader).length + ' filets'
-    + (s.hidden ? ' · ' + s.hidden + ' masqués, dont ' + s.blocked + ' sans place hors des obstacles' : '')
-    + (s.overlapping ? ' · ' + s.overlapping + ' en chevauchement' : '');
-  $('sp-out').textContent = spacing + ' px';
-  $('fs-out').textContent = fontSize + ' px';
+  $('m-chart').replaceChildren(plot);
+  const inFrame = plot.querySelectorAll('g[aria-label="dot"] circle').length;
+  $('m-stats').textContent = result ? stats(result, result.labels.length) : inFrame + ' noms écrits, aucun choix';
+  $('m-sp-out').textContent = spacing + ' px';
+  $('m-fs-out').textContent = fontSize + ' px';
   const opts = ['spacing: ' + spacing, ...(options.required ? ['required: true'] : []), ...(options.land ? ['land'] : []), ...(options.debug ? ['debug: true'] : [])].join(', ');
-  $('code').textContent = [
+  $('m-code').textContent = [
     "import { placeText } from '@ateliercartographie/label-placer/plot';",
     '',
     'Plot.plot({',
     "  projection: { type: 'azimuthal-equal-area', rotate: [-12, -53], domain },",
-    '  r: { range: [0, 26] },',
     '  marks: [',
     "    Plot.geo(land, { fill: '#e6ebef' }),",
     "    Plot.dot(countries, { x: 'lon', y: 'lat', r: 'population' }),",
@@ -136,8 +218,87 @@ function chart() {
     '})'
   ].join('\n');
 }
-for (const id of ['req', 'land', 'sp', 'fs', 'dbg']) $(id).addEventListener('input', chart);
-chart();
+
+// ---------- The scatterplot ----------
+const FR = {
+  Afghanistan: 'Afghanistan', Argentina: 'Argentine', Aruba: 'Aruba', Australia: 'Australie', Austria: 'Autriche', Bahamas: 'Bahamas',
+  Bangladesh: 'Bangladesh', Barbados: 'Barbade', Belgium: 'Belgique', Bolivia: 'Bolivie', Brazil: 'Brésil', Canada: 'Canada', Chile: 'Chili',
+  China: 'Chine', Colombia: 'Colombie', 'Costa Rica': 'Costa Rica', Croatia: 'Croatie', Cuba: 'Cuba', 'Dominican Republic': 'Rép. dominicaine',
+  Ecuador: 'Équateur', Egypt: 'Égypte', 'El Salvador': 'Salvador', Finland: 'Finlande', France: 'France', Georgia: 'Géorgie', Germany: 'Allemagne',
+  Greece: 'Grèce', Grenada: 'Grenade', Haiti: 'Haïti', 'Hong Kong': 'Hong Kong', Iceland: 'Islande', India: 'Inde', Indonesia: 'Indonésie',
+  Iran: 'Iran', Iraq: 'Irak', Ireland: 'Irlande', Israel: 'Israël', Italy: 'Italie', Jamaica: 'Jamaïque', Japan: 'Japon', Kenya: 'Kenya',
+  'South Korea': 'Corée du Sud', 'North Korea': 'Corée du Nord', Lebanon: 'Liban', Mexico: 'Mexique', Netherlands: 'Pays-Bas',
+  'New Zealand': 'Nouvelle-Zélande', Nigeria: 'Nigeria', Norway: 'Norvège', Pakistan: 'Pakistan', Peru: 'Pérou', Philippines: 'Philippines',
+  Poland: 'Pologne', Portugal: 'Portugal', Rwanda: 'Rwanda', 'Saudi Arabia': 'Arabie saoudite', 'South Africa': 'Afrique du Sud', Spain: 'Espagne',
+  Switzerland: 'Suisse', Turkey: 'Turquie', 'United Kingdom': 'Royaume-Uni', 'United States': 'États-Unis', Venezuela: 'Venezuela'
+};
+// The regions of the Gapminder clusters.
+const REGIONS = ['Asie du Sud', 'Europe et Asie centrale', 'Afrique subsaharienne', 'Amériques', 'Asie de l’Est et Pacifique', 'Moyen-Orient et Afrique du Nord'];
+const gapminder = (await fetch('https://cdn.jsdelivr.net/npm/vega-datasets@2.8.0/data/gapminder.json').then((r) => r.json()))
+  .map((d) => ({ ...d, name: FR[d.country] ?? d.country, region: REGIONS[d.cluster] }))
+  // Every year in the same order, so that a label keeps its index (its id) from one year to the next.
+  .sort((a, b) => a.country.localeCompare(b.country));
+const scatterMode = modeSwitch('s', () => renderScatter());
+let previous = null;
+
+function renderScatter() {
+  const width = chartWidth();
+  const year = +$('s-year').value;
+  const spacing = +$('s-sp').value;
+  const data = gapminder.filter((d) => d.year === year);
+  let result = null;
+  const keep = $('s-prev').checked;
+  const options = { spacing, previous: keep ? previous ?? undefined : undefined, debug: $('s-dbg').checked, onPlace: (r) => (result = r) };
+  const text = { x: 'fertility', y: 'life_expect', text: 'name', fontSize: 11, fill: 'currentColor', stroke: 'var(--surface)', strokeWidth: 2.5, paintOrder: 'stroke' };
+  const plot = Plot.plot({
+    width,
+    height: Math.max(320, Math.round(width * 0.62)),
+    grid: true,
+    inset: 10,
+    x: { label: 'Enfants par femme', domain: [0.8, 8.5] },
+    y: { label: 'Espérance de vie (ans)', domain: [25, 85] },
+    r: { range: [0, 34 * Math.min(1, width / 1000)], domain: [0, 1.4e9] },
+    color: { domain: REGIONS, legend: true },
+    marks: [
+      Plot.dot(data, { x: 'fertility', y: 'life_expect', r: 'pop', fill: 'region', fillOpacity: 0.7, stroke: 'var(--surface)', strokeWidth: 0.5 }),
+      scatterMode() === 'plot'
+        ? Plot.text(data, { ...text, textAnchor: 'start', dx: 4 })
+        : Plot.text(data, { ...text, channels: { r: { value: 'pop', scale: 'r' } }, render: placeText(options) })
+    ]
+  });
+  $('s-chart').replaceChildren(plot);
+  if (result) previous = result;
+  $('s-stats').textContent = result ? stats(result, data.length) : data.length + ' noms écrits, aucun choix';
+  $('s-year-out').textContent = String(year);
+  $('s-sp-out').textContent = spacing + ' px';
+  const opts = ['spacing: ' + spacing, ...(keep ? ['previous'] : []), ...(options.debug ? ['debug: true'] : []), 'onPlace: (r) => (previous = r)'].join(', ');
+  $('s-code').textContent = [
+    "import { placeText } from '@ateliercartographie/label-placer/plot';",
+    '',
+    'let previous;',
+    'Plot.plot({',
+    "  x: { label: 'Enfants par femme' },",
+    "  y: { label: 'Espérance de vie (ans)' },",
+    '  marks: [',
+    "    Plot.dot(data, { x: 'fertility', y: 'life_expect', r: 'pop', fill: 'region' }),",
+    '    Plot.text(data, {',
+    "      x: 'fertility', y: 'life_expect', text: 'name',",
+    "      stroke: 'white', paintOrder: 'stroke',",
+    "      channels: { r: { value: 'pop', scale: 'r' } },",
+    '      render: placeText({ ' + opts + ' })',
+    '    })',
+    '  ]',
+    '})'
+  ].join('\n');
+}
+
+function renderAll() {
+  renderMap();
+  renderScatter();
+}
+for (const id of ['m-req', 'm-land', 'm-sp', 'm-fs', 'm-dbg']) $(id).addEventListener('input', renderMap);
+for (const id of ['s-year', 's-prev', 's-sp', 's-dbg']) $(id).addEventListener('input', renderScatter);
+renderAll();
 </script>
 </body>
 </html>

@@ -222,7 +222,7 @@ Plot.plot({
 });
 ```
 
-Its options are those of `placeLabels` in pixels, without `bounds` (the plot's frame), plus `land` (GeoJSON, projected: names prefer the sea), `obstacles` (in pixels, or a function of `project(lon, lat)`), `r` (the radius without an `r` channel, 3 for Plot's default dots), `required`, `lineHeight`, `onPlace(result)` (keep it as the next `previous`) and `debug`: overlapping labels in red, a red cross at the anchor of a `blocked` label, a red ring where other labels took the room. Single-line texts only. `docs/exemple-plot.html` runs it on the countries of Europe.
+Its options are those of `placeLabels` in pixels, without `bounds` (the plot's frame), plus `land` (GeoJSON, projected: names prefer the sea), `obstacles` (in pixels, or a function of `project(lon, lat)`), `r` (the radius without an `r` channel, 3 for Plot's default dots), `required`, `lineHeight`, `onPlace(result)` (keep it as the next `previous`) and `debug`: overlapping labels in red, a red cross at the anchor of a `blocked` label, a red ring where other labels took the room. Single-line texts only. `docs/exemple-plot.html` runs it on a map of Europe and on a scatterplot (Gapminder), each against Plot alone, at the width of the page.
 
 **MapLibre**: write the result as GeoJSON properties and turn MapLibre's own collision off (`text-allow-overlap` and `text-ignore-placement`), so it does not place the labels again. `text-anchor` names the side of the text at the anchor: a `top-right` placement is `text-anchor: bottom-left`. Leaders go in a `line` layer after `map.unproject`.
 
@@ -283,7 +283,7 @@ Algorithmic inspirations, none of whose code is reused: Christensen, Marks & Shi
 
 ## Demo
 
-`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie`, `?zone=monde`, `?zone=departements` or `?zone=europe` switches its data from Bretagne to the communes of Normandie, the countries of the world (Equal Earth), the 96 départements of metropolitan France, named inside their outline or outside, on one or two lines, with the outline of France as a line obstacle, or the countries of Europe as a blank base map where every name is required. `docs/exemple-plot.html` is a map made with Observable Plot, through `placeText`, embedded in the page like the engine in the other one: both open from the file system, without a server. A slider sets the share of names to place, the most important first.
+`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie`, `?zone=monde`, `?zone=departements` or `?zone=europe` switches its data from Bretagne to the communes of Normandie, the countries of the world (Equal Earth), the 96 départements of metropolitan France, named inside their outline or outside, on one or two lines, with the outline of France as a line obstacle, or the countries of Europe as a blank base map where every name is required. `docs/exemple-plot.html` is a map and a scatterplot made with Observable Plot, through `placeText`, each to compare with Plot alone and at the width of the page, embedded in the page like the engine in the other one: both open from the file system, without a server. A slider sets the share of names to place, the most important first.
 
 ## Benchmark
 
