@@ -230,6 +230,21 @@ describe('placeLabels', () => {
     expect(placeLabels([label], options).labels[0].visible).toBe(false);
   });
 
+  it('sends a required label farther out with a long leader before letting it overlap', () => {
+    const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 }, mode: 'required' };
+    // Two lines block every box from next to the symbol to the farther ring, not the leaders.
+    const r = placeLabels([label], {
+      bounds: [0, 0, 300, 200],
+      inside: false,
+      positions: ['right'],
+      obstacles: [{ type: 'line', points: [[108, 0], [108, 200]] }, { type: 'line', points: [[150, 0], [150, 200]] }]
+    }).labels[0];
+    expect(r.overlapping).toBe(false);
+    expect(r.ring).toBe(4);
+    expect(r.box[0]).toBeGreaterThan(150);
+    expect(r.leader).not.toBeNull();
+  });
+
   it('prefers the sides, right, above, left, below, then the corners', () => {
     expect(DEFAULT_POSITIONS).toEqual(['right', 'top', 'left', 'bottom', 'top-right', 'top-left', 'bottom-right', 'bottom-left']);
     const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 } };

@@ -100,7 +100,9 @@ export function leaderGeometry({ anchor, symbol, box, style = 'octilinear', symb
   if (!route) return null;
   const { port, end } = route;
   const [px, py] = port;
-  const buffered = (extent: number) => (extent > 0 ? extent + symbolGap : 0);
+  // A leader stops short of a circle or a rect, but runs into a polygon up to its anchor: stopped
+  // on the outline, it would name the neighbour across the border as well.
+  const buffered = (extent: number) => (symbol?.type === 'polygon' ? 0 : extent > 0 ? extent + symbolGap : 0);
   const toAbsolute = (points: Point[]): Point[] => points.map(([x, y]) => [anchor[0] + x, anchor[1] + y]);
 
   const startOn = (tx: number, ty: number): Point | null => {

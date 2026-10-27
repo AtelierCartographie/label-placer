@@ -155,6 +155,13 @@ function layoutCandidates(label: LabelInput, w: number, h: number, s: CandidateS
       if (!leader) continue;
       let length = 0;
       for (let i = 1; i < leader.length; i++) length += Math.hypot(leader[i][0] - leader[i - 1][0], leader[i][1] - leader[i - 1][1]);
+      // Into a polygon, only the length out of it costs.
+      if (symbol?.type === 'polygon') {
+        const [ax, ay] = leader[0];
+        const [bx, by] = leader[1];
+        const d = Math.hypot(bx - ax, by - ay);
+        if (d > 0) length -= Math.min(d, symbolExtent(symbol, (bx - ax) / d, (by - ay) / d, [ax, ay]));
+      }
       const cost = rank + s.leaderBaseCost + (s.leaderLengthCost * length) / s.unit;
       out.push(makeCandidate(box, cost, position, ring, textAnchor, baseline, leader));
     }

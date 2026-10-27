@@ -108,6 +108,15 @@ describe('leaderGeometry', () => {
       [-60, 0]
     ]);
   });
+
+  it('runs into a polygon up to its anchor, not only to its outline', () => {
+    const square: Point[] = [[-10, -10], [10, -10], [10, 10], [-10, 10]];
+    const points = leaderGeometry({ anchor: [0, 0], box: box([60, 0], [20, 6]), symbol: { type: 'polygon', rings: [square] }, symbolGap: SYMBOL_GAP, minGap: MIN_GAP });
+    expect(rounded(points)).toEqual([
+      [0, 0],
+      [40, 0]
+    ]);
+  });
 });
 
 describe('flushAlignment', () => {

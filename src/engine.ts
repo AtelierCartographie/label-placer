@@ -15,6 +15,8 @@ const CHAIN_DEPTH = 1;
 const ALIGN_REACH = 4;
 /** Labels a group's block may push aside. */
 const GROUP_MAX_EJECT = 6;
+/** Extra leader rings, in label heights beyond the farther one, a required label tries before it overlaps. */
+const REACH = [2, 4, 7, 11];
 /** Labels a cluster needs to be set in columns, and at most in one column. */
 const ALIGN_MIN = 3;
 const ALIGN_MAX = 10;
@@ -638,12 +640,36 @@ export class Placer {
   force(): void {
     for (const i of this.order) {
       if (!this.pending.has(i) || this.current[i]) continue;
+      const far = this.reach(i).find((c) => this.isFree(i, c));
+      if (far) {
+        this.place(i, far);
+        continue;
+      }
       const chosen = this.leastBad(i, [...this.feasible[i], ...this.farther[i]]) ?? this.leastBad(i, this.blocked[i]);
       if (!chosen) continue;
       this.forced.add(i);
       this.place(i, chosen);
     }
     this.pending.clear();
+  }
+
+  /**
+   * Clean candidates of a required label on leader rings beyond its farther one, out to
+   * `REACH` label heights more, out of the other polygons: a long leader to the sea beats an
+   * overlap.
+   */
+  private reach(i: number): Candidate[] {
+    const { settings, unit } = this;
+    if (!settings.rings.length || this.labels[i].leader === false) return [];
+    const last = Math.max(...settings.rings) + unit;
+    const rings = REACH.map((k) => last + k * unit);
+    // So far from its area, a name in another one would read as its name.
+    const polygon = this.labels[i].symbol?.type === 'polygon';
+    const out = buildCandidates(this.labels[i], { ...settings, rings, inside: false }).filter(
+      (c) => c.ring > 0 && !this.classify(i, c) && !(polygon && this.inOtherPolygon(i, [c.x0, c.y0, c.x1, c.y1]))
+    );
+    for (const c of out) c.ring += settings.rings.length + 1;
+    return out.sort((a, b) => a.cost - b.cost);
   }
 
   /** Last resort of a required label: least static hard coverage, then fewest labels overlapped, then lowest cost. */
