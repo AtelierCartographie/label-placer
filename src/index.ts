@@ -27,6 +27,7 @@ export function placeLabels(labels: LabelInput[], options: PlaceOptions): Placem
     placer.chain(placer.work + work, deadline);
     placer.polish();
   }
+  placer.force();
   placer.group();
   if (options.align === 'columns') placer.align();
   const t3 = performance.now();

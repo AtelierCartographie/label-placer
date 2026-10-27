@@ -151,6 +151,8 @@ export class Placer {
   /** Position of each label in `order`. */
   private readonly rank: Int32Array;
   private readonly forced = new Set<number>();
+  /** Required labels the greedy pass left without a free spot: the chains try them, `force` sets the rest. */
+  private readonly pending = new Set<number>();
   /** Labels that kept their previous placement; polishing leaves them there. */
   private readonly sticky = new Set<number>();
   private readonly grid: Grid;
@@ -622,13 +624,26 @@ export class Placer {
       if (!chosen && this.mode(i) === 'required') {
         this.resolve(i);
         chosen = this.farther[i].find((c) => this.isFree(i, c)) ?? null;
-        if (!chosen) {
-          chosen = this.leastBad(i, [...list, ...this.farther[i]]) ?? this.leastBad(i, this.blocked[i]);
-          if (chosen) this.forced.add(i);
-        }
+        // Forced only once the chains have had their go.
+        if (!chosen) this.pending.add(i);
       }
       if (chosen) this.place(i, chosen);
     }
+  }
+
+  /**
+   * Required labels still without a spot after the optimizer take their last resort, by mode
+   * then priority, and are marked overlapping.
+   */
+  force(): void {
+    for (const i of this.order) {
+      if (!this.pending.has(i) || this.current[i]) continue;
+      const chosen = this.leastBad(i, [...this.feasible[i], ...this.farther[i]]) ?? this.leastBad(i, this.blocked[i]);
+      if (!chosen) continue;
+      this.forced.add(i);
+      this.place(i, chosen);
+    }
+    this.pending.clear();
   }
 
   /** Last resort of a required label: least static hard coverage, then fewest labels overlapped, then lowest cost. */
@@ -649,7 +664,8 @@ export class Placer {
    * Ejection chains: a hidden label takes a candidate if the at most two labels in its way
    * can move to a free spot (or, through one more ejection, to a spot freed for them). A
    * blocker that cannot move is hidden only when it is optional and of lower priority, so
-   * the hierarchy never degrades. A label inside its own area is never ejected.
+   * the hierarchy never degrades; a required label left without a spot outranks any optional
+   * one, and tries its farther ring too. A label inside its own area is never ejected.
    */
   chain(maxWork: number, deadline: number): void {
     const stop = () => this.work >= maxWork || performance.now() > deadline;
@@ -658,8 +674,10 @@ export class Placer {
       improved = false;
       for (const i of this.order) {
         if (stop()) return;
-        if (this.current[i] || this.mode(i) !== 'optional' || this.fixed(i) || this.isGroup(i)) continue;
-        for (const c of this.resolve(i)) {
+        if (this.current[i] || this.fixed(i) || this.isGroup(i)) continue;
+        const required = this.pending.has(i);
+        if (!required && this.mode(i) !== 'optional') continue;
+        for (const c of required ? [...this.resolve(i), ...this.farther[i]] : this.resolve(i)) {
           if (stop()) return;
           const blockers = this.conflicts(i, c, CHAIN_MAX_EJECT + 1);
           if (blockers.length > CHAIN_MAX_EJECT) continue;
@@ -671,7 +689,7 @@ export class Placer {
           let ok = true;
           for (const b of blockers) {
             if (this.relocate(b, CHAIN_DEPTH, stop)) continue;
-            if (this.mode(b) === 'required' || this.priority(b) >= this.priority(i)) {
+            if (this.mode(b) === 'required' || (!required && this.priority(b) >= this.priority(i))) {
               ok = false;
               break;
             }
@@ -679,6 +697,7 @@ export class Placer {
           const journal = this.journal;
           this.journal = null;
           if (ok) {
+            this.pending.delete(i);
             improved = true;
             break;
           }

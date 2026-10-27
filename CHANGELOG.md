@@ -36,4 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `spacing`: clear space between label boxes, and between leaders and boxes, to thin the dense areas first; demo: a slider on the opening map
 - `groups`: one block naming a group too dense to name one by one, set around its members' extent when one of them is left hidden (or always), pushing aside lower labels if need be; `result.groups`, `PlacedLabel.group`
 - Demo: group labels (around Rennes, Rouen, the petite couronne, the western Balkans)
+- Required labels the greedy pass leaves without a spot go through the ejection chains, which may push aside optional labels, before being forced to overlap: all 96 départements at 9 to 12 px with no overlap instead of 1 to 3
+- README: use cases, a clean map at the first go, a blank base map with every name, a map made in code
+- Demo: a bar with the zone and the sommaire always at hand; on the départements, every name required, and their number where a name would need a leader
 - Benchmark on French communes

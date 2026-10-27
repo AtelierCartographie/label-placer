@@ -63,11 +63,11 @@ Labels are placed by mode, then by decreasing `priority`:
 | ---------- | --------------------------------------------------------------------------------------------------- |
 | `pinned`   | Placed at `offset` (center of the box relative to the anchor), never moved. An obstacle for others. |
 | `required` | Always shown. Moved or given a leader when needed; overlaps only as a last resort (`overlapping`).  |
-
-A `required` label with no free candidate tries one more leader ring, a label height beyond the last one (3h by default). When that fails too, it overlaps: it takes the spot that covers the least of the hard obstacles (under the box, along the leader, out of the bounds), then the one that overlaps the fewest labels, then the cheapest.
 | `optional` | Hidden when no candidate is free. The default.                                                      |
 
-The optimizer never hides a label to show one of lower or equal priority.
+A `required` label with no free candidate tries one more leader ring, a label height beyond the last one (3h by default). When that fails too, the ejection chains try it like a hidden label, on that farther ring as well, and may push aside any optional label in its way: the mode comes first. Only a required label still without a spot after them overlaps: it takes the spot that covers the least of the hard obstacles (under the box, along the leader, out of the bounds), then the one that overlaps the fewest labels, then the cheapest.
+
+The optimizer never hides a label to show one of lower or equal priority, except an optional one for a required one.
 
 ### Spacing
 
@@ -145,6 +145,16 @@ A leader never crosses another label, another leader, or a hard obstacle, except
 ### Budget and determinism
 
 The greedy pass is deterministic. The optimizer runs ejection chains until its `budget.work` (candidate tests, default 40 per label) is spent, so the same input gives the same output on every machine. `budget.timeMs` adds a wall-clock guard that makes the result machine-dependent when it triggers.
+
+## Use cases
+
+The same engine serves maps with opposite aims; the options set the aim.
+
+**A clean map at the first go** (a mapping tool such as Khartis, where every label moved by hand is a cost): fewer names, cleanly placed. Keep labels `optional`, ranked by `priority`, give `spacing` (half a label height) so that dense areas thin first, allow leaders only to the most important labels (`leader: false` on the others, say three quarters of them), give the land as a soft `polygon` obstacle and the coastline as a soft `line`, and offer `layouts` on two lines.
+
+**A blank base map with every name** (France by départements, Europe by countries): all labels `required`, nothing hidden. Offer the layouts a cartographer would use when a name does not fit: two lines, then an abbreviation or a number at a cost above the spots next to the feature and below any leader (8, plus its rank and length): `cost: 10` sets a number only where a leader looms, as in an atlas. On the 96 départements of an A4 page at 10 px, 27 leaders give way to 21 numbers and 6 leaders. `result.stats.overlapping` tells whether the page is too small for the text size.
+
+**A map made in code** (Observable Plot, R, Mapshaper, a script): the result is read, adjusted and run again. `placeLabels` is deterministic under its work budget, so a change in the data or the options is the only change in the result. Pin what you settled with `mode: 'pinned'` and `offset` (taken from a previous result), pass `previous` to keep the rest where it was, and read `overlapping`, `visible: false` and `ring > 0` to find the labels left to look at.
 
 ## Rendering
 

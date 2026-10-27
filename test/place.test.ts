@@ -198,6 +198,20 @@ describe('placeLabels', () => {
     expect(r.labels[0].overlapping).toBe(true);
   });
 
+  it('lets ejection chains find a spot for a required label before forcing it', () => {
+    // A takes the right of its symbol first; B, just below, can only go right, over A's box,
+    // since a wall blocks its left but not A's.
+    const symbol = { type: 'circle' as const, radius: 3 };
+    const a: LabelInput = { x: 200, y: 200, width: 40, height: 10, symbol, priority: 2, mode: 'required', leader: false };
+    const b: LabelInput = { x: 200, y: 206, width: 40, height: 10, symbol, priority: 1, mode: 'required', leader: false };
+    const options: PlaceOptions = { bounds: BOUNDS, positions: ['right', 'left'], ambiguity: { cost: 0 }, obstacles: [{ type: 'rect', box: [140, 206, 196, 216] }] };
+    const r = placeLabels([a, b], options);
+    expect(r.stats.overlapping).toBe(0);
+    expect(r.labels.map((l) => l.placement)).toEqual(['left', 'right']);
+    // The greedy pass alone has to force it.
+    expect(placeLabels([a, b], { ...options, optimize: 'none' }).stats.overlapping).toBe(1);
+  });
+
   it('tries one farther leader ring for required labels only', () => {
     const label: LabelInput = { x: 100, y: 100, width: 40, height: 10, symbol: { type: 'circle', radius: 3 } };
     const options: PlaceOptions = {

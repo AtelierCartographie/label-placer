@@ -5,8 +5,8 @@
 //   projected with Equal Earth in kilometres (y up): rows [French name, population, x, y] at an interior point,
 //   and outlines simplified for the background.
 // - Départements: the 96 départements of metropolitan France (IGN Admin Express 2025) with their births in 2018
-//   summed from the communes, [name, births, x, y] at an interior point in Lambert-93 decametres, their outlines,
-//   and the outline of France (coasts and borders) as lines.
+//   summed from the communes, [name, births, x, y] at an interior point in Lambert-93 decametres, their codes,
+//   their outlines, and the outline of France (coasts and borders) as lines.
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 
@@ -163,6 +163,8 @@ const departements = {
     const [x, y] = pole(largest);
     return [f.properties.nom, births[d], r1(x / 10), r1(y / 10)];
   }),
+  // Official codes (75, 2A...), for maps that number the départements a name does not fit.
+  codes: depFeatures.map((f: { properties: { code: string } }) => f.properties.code),
   polygons: depPolygons.map((polys) => polys.flatMap((p) => p.map((ring) => dam(simplifyRing(ring, 1200))).filter((r) => r.length > 3))),
   coast: (deps.features.find((f: { properties: { code: string } }) => f.properties.code === 'contour').geometry.coordinates as Pt[][]).map((line) =>
     dam(line[0][0] === line[line.length - 1][0] && line[0][1] === line[line.length - 1][1] ? simplifyRing(line, 1200) : simplify(line, 1200))
