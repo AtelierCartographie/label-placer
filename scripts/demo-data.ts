@@ -7,6 +7,7 @@
 // - Départements: the 96 départements of metropolitan France (IGN Admin Express 2025) with their births in 2018
 //   summed from the communes, [name, births, x, y] at an interior point in Lambert-93 decametres, their codes,
 //   their outlines, and the outline of France (coasts and borders) as lines.
+// - Europe: the countries of Europe and its edges by name, for a blank basemap (see below).
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 
@@ -37,7 +38,7 @@ const ISO2: Record<string, string> = {
 };
 const fr = new Intl.DisplayNames(['fr'], { type: 'region' });
 // Shorter names, as on the Atelier's maps.
-const SHORT: Record<string, string> = { CD: 'RD Congo', CG: 'Congo', MM: 'Myanmar', PS: 'Palestine' };
+const SHORT: Record<string, string> = { CD: 'RD Congo', CG: 'Congo', MM: 'Myanmar', PS: 'Palestine', VA: 'Vatican' };
 // World Bank codes that differ from the outlines' ids.
 const WB: Record<string, string> = { 'CS-KM': 'XKX' };
 
@@ -170,6 +171,77 @@ const departements = {
     dam(line[0][0] === line[line.length - 1][0] && line[0][1] === line[line.length - 1][1] ? simplifyRing(line, 1200) : simplify(line, 1200))
   )
 };
+// Europe by country, for a blank basemap: Natural Earth outlines in Lambert azimuthal equal-area
+// (EPSG:3035 on a sphere), in kilometres with y up, clipped to the frame. Rows as for the world, the
+// microstates too small for 1:110m as points (polygon null), and the land around as context.
+function laea([lon, lat]: Pt): Pt {
+  const [l0, p0] = [(10 * Math.PI) / 180, (52 * Math.PI) / 180];
+  const [l, p] = [(lon * Math.PI) / 180, (lat * Math.PI) / 180];
+  const k = Math.sqrt(2 / (1 + Math.sin(p0) * Math.sin(p) + Math.cos(p0) * Math.cos(p) * Math.cos(l - l0)));
+  return [6371 * k * Math.cos(p) * Math.sin(l - l0), 6371 * k * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(l - l0))];
+}
+const FRAME: [number, number, number, number] = [-1800, -1850, 3150, 2200];
+// Sutherland–Hodgman against each side of the frame.
+function clipRing(ring: Pt[]): Pt[] {
+  const sides: [(p: Pt) => boolean, (a: Pt, b: Pt) => Pt][] = [0, 1, 2, 3].map((s) => {
+    const axis = s % 2, v = FRAME[s], lo = s < 2;
+    const ok = (p: Pt) => (lo ? p[axis] >= v : p[axis] <= v);
+    const cut = (a: Pt, b: Pt): Pt => {
+      const t = (v - a[axis]) / (b[axis] - a[axis]);
+      return [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+    };
+    return [ok, cut];
+  });
+  let out = ring;
+  for (const [ok, cut] of sides) {
+    const src = out;
+    out = [];
+    for (let i = 0; i < src.length; i++) {
+      const a = src[(i + src.length - 1) % src.length], b = src[i];
+      if (ok(b)) {
+        if (!ok(a)) out.push(cut(a, b));
+        out.push(b);
+      } else if (ok(a)) out.push(cut(a, b));
+    }
+    if (!out.length) break;
+  }
+  return out;
+}
+const EUROPE = [
+  'ISL', 'NOR', 'SWE', 'FIN', 'DNK', 'EST', 'LVA', 'LTU', 'IRL', 'GBR', 'NLD', 'BEL', 'LUX', 'FRA', 'DEU', 'POL', 'CZE', 'SVK', 'AUT', 'CHE',
+  'ESP', 'PRT', 'ITA', 'SVN', 'HRV', 'BIH', 'SRB', 'MNE', 'CS-KM', 'MKD', 'ALB', 'GRC', 'BGR', 'ROU', 'MDA', 'UKR', 'BLR', 'HUN', 'MLT', 'CYP',
+  'RUS', 'TUR', 'GEO', 'ARM', 'AZE'
+];
+// Andorra, Monaco, Liechtenstein, San Marino, the Vatican: [ISO 3166 alpha-3, alpha-2, lon, lat, population].
+const MICRO: [string, string, number, number, number][] = [
+  ['AND', 'AD', 1.52, 42.51, 0], ['MCO', 'MC', 7.42, 43.74, 0], ['LIE', 'LI', 9.55, 47.16, 0], ['SMR', 'SM', 12.46, 43.94, 0], ['VAT', 'VA', 12.45, 41.9, 764]
+];
+const europe = { frame: FRAME, rows: [] as [string, number, number, number][], codes: [] as string[], polygons: [] as (number[][][] | null)[], context: [] as number[][][] };
+const euroRings = (f: { geometry: { type: string; coordinates: unknown } }) =>
+  (f.geometry.type === 'Polygon' ? [f.geometry.coordinates as Pt[][]] : (f.geometry.coordinates as Pt[][][])).map((p) =>
+    p.map((ring) => clipRing(simplifyRing(ring.map(laea), 3))).filter((r) => r.length > 3 && Math.abs(area(r)) > 20)
+  ).filter((p) => p.length);
+for (const id of EUROPE) {
+  // Northern Cyprus is drawn with Cyprus, as on the maps of the countries recognized.
+  const fs = world.features.filter((f: { id: string; properties: { name: string } }) => f.id === id || (id === 'CYP' && f.properties.name === 'Northern Cyprus'));
+  const polys = fs.flatMap(euroRings);
+  const largest = polys.reduce((a: Pt[][], b: Pt[][]) => (Math.abs(area(b[0])) > Math.abs(area(a[0])) ? b : a));
+  const [x, y] = pole(largest);
+  const iso2 = ISO2[id];
+  europe.rows.push([SHORT[iso2] ?? fr.of(iso2)!, population.get(WB[id] ?? id)!, Math.round(x), Math.round(y)]);
+  europe.codes.push(iso2);
+  europe.polygons.push(polys.flat().map((r: Pt[]) => r.map(([px, py]) => [Math.round(px), Math.round(py)])));
+}
+for (const [iso3, iso2, lon, lat, pop] of MICRO) {
+  const [x, y] = laea([lon, lat]);
+  europe.rows.push([SHORT[iso2] ?? fr.of(iso2)!, population.get(iso3) ?? pop, Math.round(x), Math.round(y)]);
+  europe.codes.push(iso2);
+  europe.polygons.push(null);
+}
+for (const f of world.features)
+  if (!EUROPE.includes(f.id) && f.properties.name !== 'Northern Cyprus')
+    for (const p of euroRings(f)) for (const r of p) europe.context.push(r.map(([px, py]) => [Math.round(px), Math.round(py)]));
+process.stderr.write(`europe ${europe.rows.length}, points ${europe.polygons.flat(2).length}, context ${europe.context.length} rings\n`);
 process.stderr.write(`departements ${departements.rows.length}, births ${births.reduce((a, b) => a + b, 0)}, points ${departements.polygons.flat(2).length}, coast ${departements.coast.flat().length}\n`);
 process.stderr.write(`normandie ${normandie.length}, world ${rows.length}, outlines ${outlines.length} (${outlines.reduce((s, r) => s + r.length, 0)} points), without data: ${missing.join('; ')}\n`);
-process.stdout.write(JSON.stringify({ normandie, world: { rows, outlines }, departements }));
+process.stdout.write(JSON.stringify({ normandie, world: { rows, outlines }, departements, europe }));

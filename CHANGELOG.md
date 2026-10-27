@@ -39,4 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Required labels the greedy pass leaves without a spot go through the ejection chains, which may push aside optional labels, before being forced to overlap: all 96 départements at 9 to 12 px with no overlap instead of 1 to 3
 - README: use cases, a clean map at the first go, a blank base map with every name, a map made in code
 - Demo: a bar with the zone and the sommaire always at hand; on the départements, every name required, and their number where a name would need a leader
+- A required label with no free spot after the chains tries leader rings farther out, up to 11 label heights more and out of the other areas, before overlapping
+- Leaders of polygon labels run into the area up to the anchor, not to the outline, which a neighbour shares; only the length outside costs
+- Demo: Europe by country (`?zone=europe`), a blank base map where every name is required, the microstates as points, ISO codes as a last layout, a dot at the inner end of the leaders into areas
 - Benchmark on French communes
