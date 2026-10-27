@@ -283,7 +283,7 @@ Algorithmic inspirations, none of whose code is reused: Christensen, Marks & Shi
 
 ## Demo
 
-`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie`, `?zone=monde`, `?zone=departements` or `?zone=europe` switches its data from Bretagne to the communes of Normandie, the countries of the world (Equal Earth), the 96 départements of metropolitan France, named inside their outline or outside, on one or two lines, with the outline of France as a line obstacle, or the countries of Europe as a blank base map where every name is required. `docs/exemple-plot.html` is a map made with Observable Plot, through `placeText` (it loads the build copied in `docs/lib`). A slider sets the share of names to place, the most important first.
+`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie`, `?zone=monde`, `?zone=departements` or `?zone=europe` switches its data from Bretagne to the communes of Normandie, the countries of the world (Equal Earth), the 96 départements of metropolitan France, named inside their outline or outside, on one or two lines, with the outline of France as a line obstacle, or the countries of Europe as a blank base map where every name is required. `docs/exemple-plot.html` is a map made with Observable Plot, through `placeText`, embedded in the page like the engine in the other one: both open from the file system, without a server. A slider sets the share of names to place, the most important first.
 
 ## Benchmark
 
