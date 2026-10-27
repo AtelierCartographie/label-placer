@@ -80,9 +80,24 @@ pre code { background: none; padding: 0; }
 header.top { padding-block: 2.6rem 1.2rem; }
 .eyebrow { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); font-weight: 600; margin: 0 0 .5rem; }
 .lede { font-size: 1.12rem; color: var(--ink-2); max-width: 62ch; }
-nav.toc { display: flex; flex-wrap: wrap; gap: .35rem .5rem; margin: 1.2rem 0 0; padding: 0; list-style: none; font-size: .88rem; }
-nav.toc a { display: inline-block; padding: .2rem .55rem; border: 1px solid var(--rule); border-radius: 999px; text-decoration: none; color: var(--ink-2); background: var(--surface); }
+/* La barre collée en haut : la zone de la démo et le sommaire, la section courante repérée. */
+.bar {
+  position: sticky; top: 0; z-index: 20; margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
+}
+.bar-in { display: flex; align-items: center; gap: .5rem .8rem; padding: .45rem max(16px, env(safe-area-inset-left, 0px)); white-space: nowrap; }
+.bar .zones { display: flex; align-items: center; gap: .45rem; margin: 0; font-size: .82rem; color: var(--ink-2); flex: none; }
+.bar .zones .btn { padding: .18rem .55rem; font-size: .82rem; }
+nav.toc { display: flex; flex-wrap: nowrap; gap: .3rem; margin: 0; padding: .1rem 0; font-size: .82rem; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, transparent, #000 1rem, #000 calc(100% - 1.5rem), transparent); }
+nav.toc::-webkit-scrollbar { display: none; }
+nav.toc a:first-child { margin-left: .8rem; }
+nav.toc a:last-child { margin-right: 1.5rem; }
+@media (max-width: 640px) { .bar-in { flex-wrap: wrap; padding-block: .35rem; } nav.toc { flex-basis: 100%; } nav.toc a:first-child { margin-left: 0; } }
+nav.toc a { display: inline-block; padding: .18rem .55rem; border: 1px solid var(--rule); border-radius: 999px; text-decoration: none; color: var(--ink-2); background: var(--surface); }
 nav.toc a:hover { color: var(--accent); border-color: var(--accent); }
+nav.toc a[aria-current="true"] { color: var(--surface); background: var(--accent); border-color: var(--accent); }
+section { scroll-margin-top: 3.4rem; }
 
 /* Sections. Le repère de titre : le titre est posé en position 1 (à droite) de son point. */
 section { padding-block: 2.6rem 1rem; border-top: 1px solid var(--rule); }
@@ -221,13 +236,17 @@ footer { border-top: 1px solid var(--rule); padding-block: 1.4rem 0; font-size: 
     <p class="eyebrow">Atelier de cartographie · @ateliercartographie/label-placer</p>
     <h1>Comment label‑placer place les noms</h1>
     <p class="lede">Une carte de communes a vite plus de noms que de place. Le moteur décide, pour chaque nom, s'il est affiché et où : à côté de son symbole, dedans, ou plus loin avec un filet. Cette page montre ces décisions une à une, avec le vrai moteur embarqué.</p>
-    <p class="zones" style="margin:1rem 0 0;font-size:.88rem;color:var(--ink-2)">Zone de la démo :
+  </div>
+</header>
+<div class="bar">
+  <div class="bar-in">
+    <p class="zones">Zone
       <span class="seg" role="group" aria-label="Zone de la démo"><a class="btn" id="zone-bretagne" href="?zone=bretagne">Bretagne</a><a class="btn" id="zone-normandie" href="?zone=normandie">Normandie</a><a class="btn" id="zone-monde" href="?zone=monde">Monde</a><a class="btn" id="zone-departements" href="?zone=departements">Départements</a></span></p>
     <nav class="toc" aria-label="Sommaire">
       <a href="#probleme">Le problème</a><a href="#contrat">Le contrat</a><a href="#candidats">Candidats</a><a href="#obstacles">Obstacles</a><a href="#glouton">Passage glouton</a><a href="#chaines">Chaînes d'éjection</a><a href="#filets">Filets et ferrage</a><a href="#alignements">Alignements</a><a href="#stabilite">Stabilité</a><a href="#perfs">Performances</a><a href="#plus">Pour aller plus loin</a>
     </nav>
   </div>
-</header>
+</div>
 
 <section id="probleme">
   <div class="wrap">
@@ -564,6 +583,7 @@ footer { border-top: 1px solid var(--rule); padding-block: 1.4rem 0; font-size: 
     <h3>Étiquettes de groupe</h3>
     <div class="prose">
       <p>Un groupe trop dense pour être nommé nom par nom peut l'être d'un seul bloc : « Balkans, du nord au sud : Slovénie, Croatie… ». L'appelant compose et mesure le bloc, comme toute étiquette, et le déclare dans <code>groups</code> avec les indices de ses membres. Après l'optimisation, si l'un des membres reste masqué (<code>mode: 'auto'</code>, par défaut), le moteur retire les noms des membres et pose le bloc autour de leur emprise, avec un filet s'il doit s'en éloigner ; les symboles restent des obstacles. Il prend la position qui écarte le moins de noms, et seulement des noms moins importants que lui (sa priorité est celle de son membre le plus important) ; les noms écartés se replacent s'ils trouvent une place libre. Sans place pour le bloc, les noms reviennent. La place libérée par les membres sert ensuite aux noms masqués. Avec <code>mode: 'always'</code>, le bloc remplace les noms dès qu'il a la place.</p>
+      <p>C'est un repli de dernier recours, proche d'une légende de photo qui liste les personnes présentes : il ne se lit que si le rendu fait sa part. Ici, un titre en gras annonce la liste, l'ordre du nord au sud se suit sur la carte, et les symboles des membres sont cerclés de bleu. Ces choix reviennent à l'appelant, pas au moteur.</p>
     </div>
     <div class="controls">
       <span class="seg" role="group" aria-label="Groupe">
@@ -834,7 +854,36 @@ const ZONE_DATA = {"normandie":[["La Chapelle-Viel",3,52465,684749.8],["Charence
   const at = (name) => { const r = ROWS.find((row) => row[0] === name); return [r[2], r[3]]; };
   const fmtValue = (v) => (ZONE.format ? ZONE.format(v) : fmt.format(v));
   $('zone-' + ZONE_ID).setAttribute('aria-pressed', 'true');
-  for (const a of document.querySelectorAll('.zones a')) a.href += location.hash;
+  // The zone links keep the section in view, and the sommaire marks it.
+  const zoneLinks = [...document.querySelectorAll('.zones a')];
+  const keepHash = (hash) => { for (const a of zoneLinks) a.href = '?zone=' + a.id.slice(5) + hash; };
+  keepHash(location.hash);
+  (function scrollSpy() {
+    const links = new Map([...document.querySelectorAll('nav.toc a')].map((a) => [a.getAttribute('href').slice(1), a]));
+    const bar = document.querySelector('nav.toc');
+    let current = null;
+    const mark = (id) => {
+      if (id === current) return;
+      current = id;
+      for (const [k, a] of links) a.setAttribute('aria-current', String(k === id));
+      keepHash(id ? '#' + id : '');
+      const a = links.get(id);
+      if (a) bar.scrollTo({ left: a.offsetLeft - bar.offsetLeft - bar.clientWidth / 2 + a.offsetWidth / 2, behavior: reduce ? 'auto' : 'smooth' });
+    };
+    // The section crossing a line a third of the way down the window.
+    const update = () => {
+      const line = window.innerHeight / 3;
+      let id = null;
+      for (const k of links.keys()) {
+        const sec = document.getElementById(k);
+        if (sec && sec.getBoundingClientRect().top <= line) id = k;
+      }
+      mark(id);
+    };
+    let pending = false;
+    window.addEventListener('scroll', () => { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; update(); }); } }, { passive: true });
+    update();
+  })();
   $('hero-text').textContent = ZONE.hero;
   $('hero-source').textContent = ZONE.sourceLong;
   $('g-scene').textContent = ZONE.scene[2];
