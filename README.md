@@ -69,6 +69,10 @@ A `required` label with no free candidate tries one more leader ring, a label he
 
 The optimizer never hides a label to show one of lower or equal priority.
 
+### Spacing
+
+`spacing` keeps clear space between label boxes, and between a leader and the other labels' boxes: air between the names. It thins the dense areas of a map first, where names touched, and leaves isolated names alone; the hierarchy decides which stay. Half a label height is a good start. On Bretagne at 25 % of the names, 0.5 h shows 186 names instead of 239, with 44 leaders instead of 67. Labels stacked in columns or along the margin keep their `gap` between them.
+
 ### Candidates
 
 Each movable label tries, in order of cost:
@@ -199,6 +203,7 @@ new TextLayer({
 | `obstacles`        | `[]`                                             | `{ type: 'rect', box, soft? }`, `{ type: 'circle', x, y, radius, soft? }`, `{ type: 'line', points, soft? }`, `{ type: 'polygon', rings, soft?, cost? }` |
 | `positions`        | sides, then corners                              | candidate positions, by preference                                 |
 | `gap`              | `0.2h`                                           | space between a symbol and an adjacent label                       |
+| `spacing`          | `0`                                              | clear space between label boxes, and between leaders and boxes     |
 | `inside`           | `true`                                           | try the label inside its symbol                                    |
 | `symbolObstacles`  | `{ hardMinRadius: 0.25h, softCost: 6 }`          | how label symbols block other labels                               |
 | `ambiguity`        | `{ cost: 6, margin: 0.5h }`                      | cost of a spot as close to another symbol as to the label's own    |

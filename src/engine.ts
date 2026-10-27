@@ -37,10 +37,17 @@ function median(values: number[]): number {
   return sorted[sorted.length >> 1] || 1;
 }
 
-function candidatesConflict(a: Candidate, b: Candidate): boolean {
-  if (boxesOverlap(a.x0, a.y0, a.x1, a.y1, b.x0, b.y0, b.x1, b.y1)) return true;
-  if (a.leader && leaderHitsBox(a.leader, b)) return true;
-  if (b.leader && leaderHitsBox(b.leader, a)) return true;
+const STACKED = new Set(['column', 'margin']);
+
+/**
+ * Whether two candidates clash: boxes, or a leader and a box, closer than `spacing` (except two
+ * stacked ones, set in columns or rows on purpose), or crossing leaders.
+ */
+function candidatesConflict(a: Candidate, b: Candidate, spacing = 0): boolean {
+  const sp = spacing > 0 && !(STACKED.has(a.placement) && STACKED.has(b.placement)) ? spacing : 0;
+  if (boxesOverlap(a.x0 - sp, a.y0 - sp, a.x1 + sp, a.y1 + sp, b.x0, b.y0, b.x1, b.y1)) return true;
+  if (a.leader && leaderHitsBox(a.leader, b, sp)) return true;
+  if (b.leader && leaderHitsBox(b.leader, a, sp)) return true;
   if (a.leader && b.leader) {
     for (let i = 1; i < a.leader.length; i++)
       for (let j = 1; j < b.leader.length; j++) {
@@ -92,10 +99,10 @@ function spread(targets: number[], sizes: number[], gap: number, [lo, hi]: [numb
   return out.map((v) => v + shift);
 }
 
-function leaderHitsBox(leader: Point[], c: Candidate): boolean {
+function leaderHitsBox(leader: Point[], c: Candidate, margin = 0): boolean {
   for (let i = 1; i < leader.length; i++) {
     const [p, q] = [leader[i - 1], leader[i]];
-    if (segmentHitsBox(p[0], p[1], q[0], q[1], c.x0, c.y0, c.x1, c.y1)) return true;
+    if (segmentHitsBox(p[0], p[1], q[0], q[1], c.x0 - margin, c.y0 - margin, c.x1 + margin, c.y1 + margin)) return true;
   }
   return false;
 }
@@ -134,6 +141,8 @@ export class Placer {
   private readonly hardRects: Box[] = [];
   private readonly hardMin: number;
   private readonly softCost: number;
+  /** Clear space kept between label boxes. */
+  private readonly spacing: number;
   private alignStop = Infinity;
   work = 0;
 
@@ -162,6 +171,7 @@ export class Placer {
       unit
     });
     this.unit = unit;
+    this.spacing = Math.max(0, options.spacing ?? 0);
 
     const area = Math.max(1e-9, (bx1 - bx0) * (by1 - by0));
     const resolution = options.resolution ?? Math.min(10 / unit, Math.sqrt(MAX_RASTER_CELLS / area));
@@ -481,20 +491,21 @@ export class Placer {
     return this.labels[i].mode ?? 'optional';
   }
 
-  /** Placed labels in conflict with candidate c of label i, up to `limit`. */
-  conflicts(i: number, c: Candidate, limit = Infinity): number[] {
+  /** Placed labels in conflict with candidate c of label i, up to `limit`; `spaced: false` checks overlaps only. */
+  conflicts(i: number, c: Candidate, limit = Infinity, spaced = true): number[] {
     this.work++;
     const out: number[] = [];
     const s = ++this.stampValue;
     const g = this.grid;
-    const [i0, j0, i1, j1] = g.range(c.bx0, c.by0, c.bx1, c.by1);
+    const sp = spaced ? this.spacing : 0;
+    const [i0, j0, i1, j1] = g.range(c.bx0 - sp, c.by0 - sp, c.bx1 + sp, c.by1 + sp);
     for (let j = j0; j <= j1; j++)
       for (let ii = i0; ii <= i1; ii++)
         for (const k of g.cells[j * g.nx + ii]) {
           if (k === i || this.stamp[k] === s) continue;
           this.stamp[k] = s;
           const other = this.current[k];
-          if (other && candidatesConflict(c, other)) {
+          if (other && candidatesConflict(c, other, sp)) {
             out.push(k);
             if (out.length >= limit) return out;
           }
@@ -937,7 +948,7 @@ export class Placer {
         offset: [x - l.x, y - l.y],
         box: [c.x0, c.y0, c.x1, c.y1],
         leader: c.leader,
-        overlapping: this.forced.has(i) || (this.fixed(i) && this.conflicts(i, c, 1).length > 0) || this.outOfBounds(c)
+        overlapping: this.forced.has(i) || (this.fixed(i) && this.conflicts(i, c, 1, false).length > 0) || this.outOfBounds(c)
       };
     });
     const placed = labels.filter((l) => l.visible).length;

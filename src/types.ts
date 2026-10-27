@@ -129,6 +129,12 @@ export interface PlaceOptions {
   positions?: Position[];
   /** Distance between a symbol's edge and its label. */
   gap?: number;
+  /**
+   * Clear space kept between two label boxes, in the caller's units. Defaults to 0. Air between
+   * the names thins the dense areas of a map first: try half a label height. Labels stacked in
+   * columns or along the margin keep their own `gap` between them.
+   */
+  spacing?: number;
   /** Try to put the label inside its symbol when it fits. Defaults to true. */
   inside?: boolean;
   /**

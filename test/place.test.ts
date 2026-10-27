@@ -485,6 +485,18 @@ describe('placeLabels', () => {
       }
   });
 
+  it('keeps clear space between labels, thinning the dense areas first', () => {
+    const spaced = placeLabels(labels, { ...options, spacing: 6 });
+    const gap = (a: Box, b: Box) => Math.max(a[0] - b[2], b[0] - a[2], a[1] - b[3], b[1] - a[3]);
+    const shown = visible(spaced.labels);
+    for (let a = 0; a < shown.length; a++)
+      for (let b = a + 1; b < shown.length; b++) expect(gap(shown[a].box!, shown[b].box!)).toBeGreaterThanOrEqual(6 - 1e-9);
+    expect(spaced.stats.placed).toBeLessThan(result.stats.placed);
+    // The most important labels stay.
+    const top = labels.map((_, i) => i).sort((a, b) => labels[b].priority! - labels[a].priority!).slice(0, 10);
+    expect(top.filter((i) => spaced.labels[i].visible).length).toBeGreaterThanOrEqual(top.filter((i) => result.labels[i].visible).length - 1);
+  });
+
   it('places more labels with ejection chains than greedily, without losing higher ones', () => {
     const greedy = placeLabels(labels, { ...options, optimize: 'none' });
     expect(result.stats.placed).toBeGreaterThanOrEqual(greedy.stats.placed);
