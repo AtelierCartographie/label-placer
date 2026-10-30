@@ -26,7 +26,7 @@ Zero dependencies. Works in any unit (pixels, points, millimetres) and in a Web 
 npm install @ateliercartographie/label-placer
 ```
 
-ES module and CommonJS builds with their TypeScript types. Two adapters come with it (see Rendering): `@ateliercartographie/label-placer/plot` for Observable Plot, `@ateliercartographie/label-placer/mapshaper` for Mapshaper.
+ES module and CommonJS builds with their TypeScript types. Three adapters come with it (see Rendering): `@ateliercartographie/label-placer/plot` for Observable Plot, `@ateliercartographie/label-placer/mapshaper` for Mapshaper, `@ateliercartographie/label-placer/maplibre` for MapLibre.
 
 ## Quick start
 
@@ -267,7 +267,18 @@ mapshaper departements.json -style fill='#eef2f5' stroke='#9aa7b2' \
 
 The labels are placed on the SVG page: `width` and `margin` (pixels) fit `bbox` (projected units, the target layer's by default) to it, and the returned commands start with the matching `-frame`. Point symbols take their radius from the `r` field that `-style r=` writes (or `r`: a number or a field), polygons are labelled at an interior point within their outline. The function writes `lp_visible`, `lp_reason`, `lp_by` (the names in the way of a hidden label), `lp_blocked` and `lp_overlapping` back to the layer, adds a `<layer>-leaders` line layer under a `<layer>-labels` layer of points at their text positions, and styles it with `-labels`: `labelStyle` adds options (`fill`, `halo-width`...), `leaderStyle` styles the leaders. Its other options are those of `placeLabels` in pixels, plus `fontSize`, `fontWeight`, `lineHeight`, `priority` (a field, else the radius), `required` or `mode` (a field), `twoLines`, `short` (a field, at `shortCost`, 10), `leaders` (the share of labels, most important first, that may take a leader), `land` (GeoJSON in projected units, names prefer the sea) and `onPlace`. Text is measured with the metrics of Helvetica and Arial, the fonts the labels name first; the adapter exports that measure, `textWidth(text, fontSize, bold?)`, for scripts in Node. `-require` and `-run` work on the command line, not in the web console: place there, then open the SVG or the layers in mapshaper.org.
 
-**MapLibre**: write the result as GeoJSON properties and turn MapLibre's own collision off (`text-allow-overlap` and `text-ignore-placement`), so it does not place the labels again. `text-anchor` names the side of the text at the anchor: a `top-right` placement is `text-anchor: bottom-left`. Leaders go in a `line` layer after `map.unproject`.
+**MapLibre**: `mapLabels(points, options)`, from `@ateliercartographie/label-placer/maplibre`, places the names of a GeoJSON point layer (longitude and latitude) at every half zoom from `minzoom` to `maxzoom` with `placeZooms`, and returns two GeoJSON sources, the names and the leaders, and the layers that show them, one symbol and one line layer per zoom placed, MapLibre's own collision off. MapLibre is not a dependency.
+
+```js
+import { mapLabels } from '@ateliercartographie/label-placer/maplibre';
+
+const placed = mapLabels(towns, { text: 'name', priority: 'births', r: 'r', minzoom: 7, maxzoom: 12, fontSize: 12, measure, spacing: 2 });
+map.addSource('lp-labels', { type: 'geojson', data: placed.labels });
+map.addSource('lp-leaders', { type: 'geojson', data: placed.leaders });
+for (const layer of placed.layers({ labels: 'lp-labels', leaders: 'lp-leaders', font: ['Noto Sans Regular'] })) map.addLayer(layer);
+```
+
+Points are projected in Web Mercator at each zoom (`tileSize` 512). Between two placements the map grows while the text keeps its size: a name next to its symbol is set at its anchor with a `text-offset` in ems (`lp_offset`) and a `text-anchor` (`lp_anchor`), so that it stays next to it; a name with a leader is set at its place on the map with its leader, and drifts with the map by at most 41 % until the next placement (`step`, 0.5 by default; 1 halves the work). Below `minzoom` no name shows; above `maxzoom`, its placement. Each name carries `lp_zoom` and `lp_minzoom`, the first zoom it shows at. The options are those of `placeLabels` in pixels, plus `text`, `fontSize` (12), `lineHeight`, `measure(text, fontSize)` (the metrics of Helvetica and Arial by default: measure MapLibre's glyph font on a canvas instead, as the demo does with Noto Sans), `r` (circle radius in pixels, a number or a property), `priority` (a property, else the radius), `required` or `mode`, `land` (GeoJSON, names prefer the sea) and `obstacles(zoom, project)`. `layers({ labels, leaders, font?, color?, halo?, leaderColor?, id? })` gives the layer specs. `docs/exemple-maplibre.html` places the 1,202 communes of Bretagne from zoom 7 to 12 in about a second, against MapLibre's own placement.
 
 ## API
 
@@ -334,7 +345,7 @@ Algorithmic inspirations, none of whose code is reused: Christensen, Marks & Shi
 
 ## Demo
 
-`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie`, `?zone=monde`, `?zone=departements` or `?zone=europe` switches its data from Bretagne to the communes of Normandie, the countries of the world (Equal Earth), the 96 départements of metropolitan France, named inside their outline or outside, on one or two lines, with the outline of France as a line obstacle, or the countries of Europe as a blank base map where every name is required. `docs/exemple-plot.html` is a map and a scatterplot made with Observable Plot, through `placeText`, each to compare with Plot alone and at the width of the page, embedded in the page like the engine in the other one: both open from the file system, without a server. A slider sets the share of names to place, the most important first.
+`docs/comment-ca-marche.html` (in French) shows each step on the real engine, embedded in the page. `?zone=normandie`, `?zone=monde`, `?zone=departements` or `?zone=europe` switches its data from Bretagne to the communes of Normandie, the countries of the world (Equal Earth), the 96 départements of metropolitan France, named inside their outline or outside, on one or two lines, with the outline of France as a line obstacle, or the countries of Europe as a blank base map where every name is required. `docs/exemple-maplibre.html` places the communes of Bretagne on a MapLibre map, every half zoom, against MapLibre's own placement. `docs/exemple-plot.html` is a map and a scatterplot made with Observable Plot, through `placeText`, each to compare with Plot alone and at the width of the page, embedded in the page like the engine in the other one: both open from the file system, without a server. A slider sets the share of names to place, the most important first.
 
 ## Benchmark
 
@@ -361,7 +372,7 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 pnpm install
 pnpm test        # vitest, with properties checked on 60 random scenes (test/properties.test.ts)
 pnpm build       # type check, ES and CommonJS builds, declarations
-pnpm build:docs  # rebuild the engine embedded in the demo pages
+pnpm build:docs  # rebuild the engine embedded in the demo pages (and node scripts/maplibre-data.ts for the MapLibre page's data)
 pnpm bench       # place the names of French communes (see Benchmark)
 ```
 
@@ -376,7 +387,7 @@ The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `doc
 
 **Adapters and rendering**
 
-- MapLibre or Leaflet: labels placed once per zoom level with `placeZooms`, instead of the built-in collision detection, served as a GeoJSON source with `minzoom`.
+- Leaflet: the names placed at each zoom with `placeZooms`, as for MapLibre.
 - A demo page rendering the same placement with SVG, Canvas and deck.gl.
 - Animated transitions: before and after pairs telling the labels that enter, leave or move, for a chart by year.
 - An optional `measure()` helper (Canvas, OffscreenCanvas), from the Helvetica and Arial metrics of the Mapshaper adapter.

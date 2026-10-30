@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PlacedLabel.reason`: why a label is hidden (`size`, `group`, `bounds`, `obstacles`, `labels`, `stack`), and `by` and `byGroups`: the labels and blocks on the spot it would get with the fewest of them in the way
 - `placeBlocks()`: the emptiest spot for a legend, a title or a scale before the names, along the edges of the bounds, clear of hard obstacles and symbols, as little as can be over soft obstacles and the room the names need; `DEFAULT_BLOCK_POSITIONS`
 - `placeZooms()`: labels placed at several zooms, the names shown at one level ranked first and kept in their place at the next, so that zooming in takes few names away and moves few; `minZoom` for each label
+- `mapLabels()` (`@ateliercartographie/label-placer/maplibre`): the names of a GeoJSON point layer placed every half zoom with `placeZooms`, as GeoJSON sources for MapLibre's symbol and line layers, names next to their symbol held there by a `text-offset` in ems between placements; `layers()` gives the layer specs
+- Demo: `docs/exemple-maplibre.html`, the communes of Bretagne on a MapLibre map from zoom 7 to 12, against MapLibre's own placement
 - Demo: the stability figure compares each zoom on its own, `previous` and `placeZooms`, with the names moved and the names lost
 - Demo: the legend and the title placed by `placeBlocks`, against a legend fixed bottom left, with the best spot of each position and its cost
 - `placeText({ debug })`: the reason in each hidden label's title, and a dashed line to the labels in its way; Mapshaper: `lp_reason` and `lp_by` (their names) written back to the layer

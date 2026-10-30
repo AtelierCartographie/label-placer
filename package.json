@@ -21,6 +21,11 @@
       "types": "./dist/src/mapshaper.d.ts",
       "import": "./dist/mapshaper.js",
       "require": "./dist/mapshaper.cjs"
+    },
+    "./maplibre": {
+      "types": "./dist/src/maplibre.d.ts",
+      "import": "./dist/maplibre.js",
+      "require": "./dist/maplibre.cjs"
     }
   },
   "files": [
@@ -54,7 +59,8 @@
     "map",
     "dataviz",
     "observable-plot",
-    "mapshaper"
+    "mapshaper",
+    "maplibre"
   ],
   "author": "Atelier de cartographie de Sciences Po",
   "license": "ISC",

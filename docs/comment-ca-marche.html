@@ -639,7 +639,7 @@ footer { border-top: 1px solid var(--rule); padding-block: 1.4rem 0; font-size: 
     <div class="fig-grid">
       <figure style="margin:0">
         <div class="panel scroll-x"><svg id="st-svg" viewBox="0 0 640 420" style="min-width:560px" role="img" aria-labelledby="st-title"><title id="st-title">Placement autour de Rennes à plusieurs niveaux de zoom, étiquettes déplacées entourées</title></svg></div>
-        <figcaption>150 communes autour de Rennes, symboles de taille constante à l'écran. Entourées en rouge : les étiquettes visibles au niveau précédent et à celui-ci qui ont changé de position ; croix rouge : un nom visible au niveau précédent, son symbole toujours à l'écran, qui a disparu.</figcaption>
+        <figcaption><span id="st-scene">150 communes autour de Rennes</span>, symboles de taille constante à l'écran. Entourées en rouge : les étiquettes visibles au niveau précédent et à celui-ci qui ont changé de position ; croix rouge : un nom visible au niveau précédent, son symbole toujours à l'écran, qui a disparu.</figcaption>
       </figure>
       <div class="panel side" id="st-side" aria-live="polite"></div>
     </div>
@@ -695,7 +695,7 @@ const { labels } = placeLabels(villes.map((v) =&gt; ({
 
 for (const l of labels) if (l.visible) dessiner(l.x, l.y, l.textAnchor, l.baseline, l.leader);</code></pre>
     <div class="prose">
-      <p>Dépôt : <a href="https://github.com/AtelierCartographie/label-placer">github.com/AtelierCartographie/label-placer</a>. Le README détaille toutes les options et des exemples de rendu SVG, Canvas, deck.gl et MapLibre. Pour une carte faite en code, <a href="exemple-plot.html">l'exemple Observable Plot</a> branche le moteur sur un <code>Plot.text</code> et montre ce qu'il reste à revoir.</p>
+      <p>Dépôt : <a href="https://github.com/AtelierCartographie/label-placer">github.com/AtelierCartographie/label-placer</a>. Le README détaille toutes les options et des exemples de rendu SVG, Canvas, deck.gl et MapLibre. Pour une carte faite en code, <a href="exemple-plot.html">l'exemple Observable Plot</a> branche le moteur sur un <code>Plot.text</code> et montre ce qu'il reste à revoir ; <a href="exemple-maplibre.html">l'exemple MapLibre</a> place les noms d'une carte interactive à chaque demi-zoom.</p>
       <h3>Une démarche de cartographe</h3>
       <p>La plupart des outils de placement automatique cherchent à afficher le plus d'étiquettes possible. Ce paquet vise autre chose : un rendu propre, prêt à diffuser ou à imprimer, tel que le composerait un cartographe ou un graphiste. Ses règles viennent d'abord de la <strong>pratique empirique de l'Atelier de cartographie de Sciences Po</strong>, relevée sur ses cartes publiées et éprouvée ici, figure après figure :</p>
       <ul class="refs">
@@ -2170,6 +2170,7 @@ const ZONE_DATA = {"normandie":[["La Chapelle-Viel",3,52465,684749.8],["Charence
     let sub = ROWS.filter((r) => Math.abs(r[2] - cx) < base / 2 && Math.abs(r[3] - cy) < (base * H) / W / 2);
     sub = sub.sort((a, b) => b[1] - a[1]).slice(0, N);
     const vmax = Math.max(...sub.map((r) => r[1]));
+    $('st-scene').textContent = 'Les ' + fmt.format(sub.length) + ' plus grands symboles autour de ' + ZONE.stability[0];
     const levels = [0, 1, 2, 3, 4, 5].map((z) => {
       const k = W / (base / Math.pow(1.25, z));
       return sub.map((r, i) => ({

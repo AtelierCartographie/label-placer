@@ -1,13 +1,14 @@
 // Rebuild the engine embedded in the demo pages, which open from the file system without a server:
 // docs/comment-ca-marche.html (the line holding `var LabelPlacer=`) and docs/exemple-plot.html
-// (the line holding `var LabelPlacerPlot=`). Usage: node scripts/build-docs.ts
+// (the line holding `var LabelPlacerPlot=`) and docs/exemple-maplibre.html (`var LabelPlacerMapLibre=`). Usage: node scripts/build-docs.ts
 import { readFileSync, writeFileSync } from 'node:fs';
 import { build } from 'vite';
 
 const root = new URL('..', import.meta.url).pathname;
 const pages: [entry: string, name: string, page: string][] = [
   ['scripts/docs-entry.ts', 'LabelPlacer', 'docs/comment-ca-marche.html'],
-  ['src/plot.ts', 'LabelPlacerPlot', 'docs/exemple-plot.html']
+  ['src/plot.ts', 'LabelPlacerPlot', 'docs/exemple-plot.html'],
+  ['src/maplibre.ts', 'LabelPlacerMapLibre', 'docs/exemple-maplibre.html']
 ];
 
 for (const [entry, name, page] of pages) {

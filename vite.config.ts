@@ -7,7 +7,8 @@ export default defineConfig({
       entry: {
         'label-placer': resolve(import.meta.dirname, 'src/index.ts'),
         plot: resolve(import.meta.dirname, 'src/plot.ts'),
-        mapshaper: resolve(import.meta.dirname, 'src/mapshaper.ts')
+        mapshaper: resolve(import.meta.dirname, 'src/mapshaper.ts'),
+        maplibre: resolve(import.meta.dirname, 'src/maplibre.ts')
       },
       fileName: (format, name) => `${name}.${format === 'es' ? 'js' : 'cjs'}`,
       formats: ['es', 'cjs']
