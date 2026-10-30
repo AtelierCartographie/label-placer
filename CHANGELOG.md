@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Property tests: on 60 random scenes mixing every feature, the counts and flags agree, nothing shown and not flagged overlaps, crowds the spacing, crosses a leader, leaves the bounds or lies on a hard obstacle, required and pinned labels are shown, and the result is the same twice, and again with itself as `previous`
 
 - `PlacedLabel.reason`: why a label is hidden (`size`, `group`, `bounds`, `obstacles`, `labels`, `stack`), and `by` and `byGroups`: the labels and blocks on the spot it would get with the fewest of them in the way
+- `placeBlocks()`: the emptiest spot for a legend, a title or a scale before the names, along the edges of the bounds, clear of hard obstacles and symbols, as little as can be over soft obstacles and the room the names need; `DEFAULT_BLOCK_POSITIONS`
+- Demo: the legend and the title placed by `placeBlocks`, against a legend fixed bottom left, with the best spot of each position and its cost
 - `placeText({ debug })`: the reason in each hidden label's title, and a dashed line to the labels in its way; Mapshaper: `lp_reason` and `lp_by` (their names) written back to the layer
 
 ### Fixed

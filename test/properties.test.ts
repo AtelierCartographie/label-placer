@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { placeLabels } from '../src/index.ts';
+import { placeBlocks, placeLabels } from '../src/index.ts';
 import { segmentHitsBox, segmentsCross } from '../src/geometry.ts';
 import { pointInRings } from '../src/polygon.ts';
 import type { Box, GroupInput, LabelInput, Obstacle, PlaceOptions, PlacementResult, Point } from '../src/index.ts';
@@ -248,6 +248,35 @@ describe('placement properties, on random scenes', () => {
     const r = placeLabels(scene.labels, scene.options);
     expect(violations(scene, r)).toEqual([]);
     expect(strip(placeLabels(scene.labels, scene.options))).toBe(strip(r));
+  });
+
+  it.each(SEEDS)('scene %i: blocks in the bounds, apart, and clear of the symbols and the hard obstacles unless flagged', (seed) => {
+    const scene = randomScene(seed);
+    const [W, H] = [scene.options.bounds[2], scene.options.bounds[3]];
+    const margin = seed % 3 === 0 ? 0 : 6;
+    const blocks = placeBlocks(
+      [
+        { width: W * 0.25, height: H * 0.2 },
+        { width: W * 0.5, height: H * 0.08, positions: ['top', 'bottom'] },
+        { width: W * 0.15, height: H * 0.06 }
+      ],
+      { bounds: scene.options.bounds, obstacles: scene.options.obstacles, labels: scene.labels, margin }
+    );
+    const out: string[] = [];
+    const cell = 3;
+    blocks.forEach((b, k) => {
+      if (!inside(b.box, scene.options.bounds)) out.push(`block ${k} out of the bounds`);
+      for (let j = 0; j < k; j++) if (overlap(b.box, blocks[j].box, margin - 1e-6)) out.push(`blocks ${j} and ${k} closer than the margin`);
+      if (b.overlapping) return;
+      const shrunk: Box = [b.box[0] + cell, b.box[1] + cell, b.box[2] - cell, b.box[3] - cell];
+      for (const o of scene.options.obstacles ?? []) if (o.type === 'rect' && !o.soft && overlap(b.box, o.box)) out.push(`block ${k} on a hard rect`);
+      scene.labels.forEach((l, i) => {
+        const r = l.symbol?.type === 'circle' ? l.symbol.radius : l.symbol?.type === 'rect' ? 0 : l.symbol ? -1 : 0;
+        if (r < 0) return;
+        if (Math.hypot(Math.max(shrunk[0] - l.x, 0, l.x - shrunk[2]), Math.max(shrunk[1] - l.y, 0, l.y - shrunk[3])) < r) out.push(`block ${k} over the symbol of label ${i}`);
+      });
+    });
+    expect(out).toEqual([]);
   });
 
   it.each(SEEDS.slice(0, 20))('scene %i: run again on its own result, as consistent and clear', (seed) => {

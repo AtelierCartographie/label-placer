@@ -134,6 +134,10 @@ A group label is a last resort, close to a photo caption that lists the people i
 
 `{ type: 'polygon', rings, soft?, cost? }` is filled, by the even-odd rule. Hard, it is a mask: label boxes and leaders keep off it (the gaps of an interrupted projection, the regions beyond a regional map). Soft, a label box over it costs `cost` (default 1, in position-rank units) times the share of the box it covers, and leaders cross it freely. With the land as a soft polygon, the names of coastal places prefer the sea: right on land costs the cost, left at sea its rank, 2. Half on land, a name pays half: give the coastline as a soft line too, so that crossing it costs.
 
+### Legend and title
+
+`placeBlocks(blocks, { bounds, obstacles?, labels?, margin?, positions?, roomCost? })` finds the emptiest spot for page items, before the names: a legend, a title, a scale, an inset map, each `{ id?, width, height, positions? }`. It tries the corners of the bounds, then the middles of their edges (`positions`, in order of preference; by default bottom left, top left, bottom right, top right, then bottom, top, left, right), each slid along its edge by a quarter of the block at a time. A block never covers a hard obstacle nor a point symbol of `labels`, however small, nor a bare anchor: it hides no data. It pays the soft obstacles as a label does (land, coastlines; the areas of polygon labels as land), the room the names need around their anchors (their width on either side, their height above and below; the most important name counts `roomCost`, 4, wholly covered, the last a quarter of it), half a rank per position down the list, and one per slide of its own length. The blocks are placed in turn, each an obstacle for the next, `margin` apart and from the edges. Each result gives its `box`, its `position`, its `cost`, and `overlapping` when no spot was clear. Pass the boxes to `placeLabels` as hard `rect` obstacles. On the demo's Europe, the legend goes top left, out of the Atlantic coast, and all 50 names fit instead of 49.
+
 ### Symbols as obstacles
 
 Every label's symbol is an obstacle for the other labels. A symbol drawn without a label (filtered out, or too small to name) is passed as a label with no `width` or `height`: it is never shown, but it is an obstacle and a feature like the others. Symbols at least `symbolObstacles.hardMinRadius` large (default a quarter of a label height) block. Smaller ones only add `symbolObstacles.softCost` per label-height² covered. Making every tiny dot a hard obstacle leaves the largest features of a dense map without a label. A symbol smaller than a raster cell still counts in the cell it sits in.
@@ -296,6 +300,10 @@ Costs are in position-rank units: the n-th preferred position costs n.
 
 `PlacedGroup` (in `result.groups`): `index`, `id`, `visible`, `members`, `placement`, `ring`, `layout`, `x`, `y`, `textAnchor`, `baseline`, `box`, `leader`.
 
+### `placeBlocks(blocks, options): PlacedBlock[]`
+
+See Legend and title. `PlacedBlock`: `index`, `id`, `box`, `position`, `cost`, `overlapping`. `DEFAULT_BLOCK_POSITIONS` lists the default positions.
+
 ### `leaderGeometry({ anchor, symbol?, box, style?, symbolGap?, minGap? }): Point[] | null`
 
 ### `flushAlignment(anchor, box): 'start' | 'middle' | 'end'`
@@ -357,7 +365,6 @@ The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `doc
 
 - An exact boundary labeling (minimal total leader length without crossings).
 - Columns on a world map: Central and Eastern Europe still lack room (Russia, Ukraine and Turkey fill the east); leaders routed around labels rather than taking them along.
-- Legend and title: the emptiest spot for a block of a given size, found on the same obstacle rasters, before the names.
 - Consistent across zoom levels: a label shown at one zoom stays shown, in the same place if it can, at the next one.
 
 **Adapters and rendering**
