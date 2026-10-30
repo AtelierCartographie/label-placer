@@ -2,3 +2,5 @@ node_modules
 dist
 *.local
 bench/out
+.DS_Store
+.claude/
