@@ -174,7 +174,7 @@ The same engine serves maps with opposite aims; the options set the aim.
 
 **A blank base map with every name** (France by départements, Europe by countries): all labels `required`, nothing hidden. Offer the layouts a cartographer would use when a name does not fit: two lines, then an abbreviation or a number at a cost above the spots next to the feature and below any leader (8, plus its rank and length): `cost: 10` sets a number only where a leader looms, as in an atlas. On the 96 départements of an A4 page at 10 px, 27 leaders give way to 21 numbers and 6 leaders. A `required` label with no free spot left, even after the ejection chains, tries leader rings farther out (up to 11 label heights beyond the last one, out of the other areas, so at sea) before it overlaps. `result.stats.overlapping` tells whether the page is too small for the text size. On the 50 countries of Europe (Natural Earth 1:110m, A4 page), names alone leave 1 to 4 overlaps from 8 to 12 px, all in the Balkans; with ISO codes as a last layout at cost 10, none from 8 to 10 px: a dozen codes, from Belgium to the Caucasus, for a key beside the map.
 
-**A map made in code** (Observable Plot, R, Mapshaper, a script): the result is read, adjusted and run again. `placeLabels` is deterministic under its work budget, so a change in the data or the options is the only change in the result. Pin what you settled with `mode: 'pinned'` and `offset` (taken from a previous result), pass `previous` to keep the rest where it was, and read the result to find the labels left to look at: `overlapping`, `ring > 0`, and the hidden ones by their `reason`: `bounds` or `obstacles` when every spot falls out of the bounds or on a static obstacle (look at the bounds, the obstacles or the size), `labels` when other labels took its room (look at the priorities, the spacing, the text size): `by` names the labels on its most accessible spot, the ones to lower, or to raise it above. With Observable Plot, `placeText` does all this in a text mark (see Rendering), and `debug: true` marks these labels on the map, a dashed line from each hidden label to the ones in its way. With Mapshaper, `labels` writes `lp_visible`, `lp_reason`, `lp_by` (their names), `lp_blocked` and `lp_overlapping` back to the layer, for `-filter`, `-info` or a CSV.
+**A map made in code** (Observable Plot, R, Mapshaper, a script): the result is read, adjusted and run again. `placeLabels` is deterministic under its work budget, so a change in the data or the options is the only change in the result. Pin what you settled with `mode: 'pinned'` and `offset` (taken from a previous result), pass `previous` to keep the rest where it was, and read the result to find the labels left to look at: `overlapping`, `ring > 0`, and the hidden ones by their `reason`: `bounds` or `obstacles` when every spot falls out of the bounds or on a static obstacle (look at the bounds, the obstacles or the size), `labels` when other labels took its room (look at the priorities, the spacing, the text size): `by` names the labels on its most accessible spot, the ones to lower, or to raise it above. With Observable Plot, `placeText` does all this in a text mark (see Rendering), and `debug: true` marks these labels on the map, a dashed line from each hidden label to the ones in its way. With any other renderer, `debugSVG(labels, result, { names?, size?, bounds? })` draws the same marks as an SVG group (a whole SVG with `bounds`) to lay over the map, each with a `<title>` that names the label and says why it is hidden, and `debugMarks` gives them as path data to draw yourself. With Mapshaper, `labels` writes `lp_visible`, `lp_reason`, `lp_by` (their names), `lp_blocked` and `lp_overlapping` back to the layer, for `-filter`, `-info` or a CSV.
 
 ## Rendering
 
@@ -323,6 +323,10 @@ See Legend and title. `PlacedBlock`: `index`, `id`, `box`, `position`, `cost`, `
 
 See Zoom levels. `ZoomLevel`: `zoom?`, `labels`, `options`. `ZoomResult`: `levels`, `minZoom`.
 
+### `debugMarks(labels, result, options?): DebugMark[]` and `debugSVG(labels, result, options?): string`
+
+What to look at in a result: a mark per overlapping label (`overlapping`, its box), per hidden label at its anchor (`blocked`, a cross, when obstacles or the bounds left it no spot; `crowded`, a ring, when other labels took its room) and per label in its way (`by`, a line to its middle). Each `DebugMark` has `kind`, `index`, `d` (SVG path data in your units) and `title` (`Rennes: hidden by Cesson-Sévigné`). Options: `names` (one per label; the ids by default), `size` (half a cross, 0.3 median label heights), and for `debugSVG`, `bounds` for a whole SVG. Labels named by a group's block and symbols without a label get no mark.
+
 ### `leaderGeometry({ anchor, symbol?, box, style?, symbolGap?, minGap? }): Point[] | null`
 
 ### `flushAlignment(anchor, box): 'start' | 'middle' | 'end'`
@@ -398,7 +402,6 @@ The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `doc
 
 **API and performance**
 
-- A debug view outside Plot: the hidden labels, their reasons and the labels in their way, as an SVG layer any renderer can draw.
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.
 

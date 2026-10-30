@@ -1,5 +1,6 @@
+import { debugMarks } from './debug.ts';
 import { placeLabels } from './index.ts';
-import type { LabelInput, LabelMode, Obstacle, PlaceOptions, PlacedLabel, PlacementResult, Point } from './types.ts';
+import type { LabelInput, LabelMode, Obstacle, PlaceOptions, PlacementResult, Point } from './types.ts';
 
 /**
  * Observable Plot adapter: a `render` function for a text mark, which places its labels and
@@ -165,19 +166,6 @@ export function placeText(options: PlotPlacementOptions = {}): Render {
       const el = texts[k];
       if (!p.visible || !p.box) {
         el.remove();
-        if (debug && labels[k].width > 0) {
-          const by = p.by.map((b) => result.labels[b]);
-          marks.append(hiddenMark(doc, labels[k].x, labels[k].y, p, el.textContent ?? '', p.by.map((b) => texts[b].textContent ?? '')));
-          // A dashed line to each label in its way.
-          for (const q of by) {
-            if (!q.box) continue;
-            const line = doc.createElementNS(SVG, 'path');
-            line.setAttribute('d', `M${labels[k].x},${labels[k].y}L${(q.box[0] + q.box[2]) / 2},${(q.box[1] + q.box[3]) / 2}`);
-            line.setAttribute('stroke-dasharray', '2,2');
-            line.setAttribute('stroke-width', '0.5');
-            marks.append(line);
-          }
-        }
         return;
       }
       // Centered on its box, with Plot's own middle baseline.
@@ -191,6 +179,21 @@ export function placeText(options: PlotPlacementOptions = {}): Render {
         leaders.append(path);
       }
     });
+    // What to look at: the overlapping texts in red, marks at the hidden labels' anchors.
+    if (debug)
+      for (const m of debugMarks(labels, result, { names: texts.map((t) => t.textContent ?? ''), size: 3 })) {
+        if (m.kind === 'overlapping') continue;
+        const e = doc.createElementNS(SVG, 'path');
+        e.setAttribute('d', m.d);
+        if (m.kind === 'by') {
+          e.setAttribute('stroke-dasharray', '2,2');
+          e.setAttribute('stroke-width', '0.5');
+        }
+        const title = doc.createElementNS(SVG, 'title');
+        title.textContent = m.title;
+        e.append(title);
+        marks.append(e);
+      }
     return out;
   };
 }
@@ -208,23 +211,6 @@ function measurer(doc: Document): (text: string, font: string, size: number) => 
     ctx.font = font;
     return ctx.measureText(text).width;
   };
-}
-
-const REASONS: Record<string, string> = {
-  bounds: 'no spot within the frame',
-  obstacles: 'no spot clear of the obstacles',
-  labels: 'its room taken by other labels',
-  group: 'named by a group',
-  stack: 'no room left in its stack'
-};
-
-function hiddenMark(doc: Document, x: number, y: number, p: PlacedLabel, name: string, by: string[]): SVGElement {
-  const e = doc.createElementNS(SVG, 'path');
-  e.setAttribute('d', p.blocked ? `M${x - 3},${y - 3}L${x + 3},${y + 3}M${x - 3},${y + 3}L${x + 3},${y - 3}` : `M${x + 4},${y}A4,4 0 1,1 ${x - 4},${y}A4,4 0 1,1 ${x + 4},${y}`);
-  const title = doc.createElementNS(SVG, 'title');
-  title.textContent = `${name}: ${by.length ? 'hidden by ' + by.join(', ') : (REASONS[p.reason ?? ''] ?? 'hidden')}`;
-  e.append(title);
-  return e;
 }
 
 /** From longitude and latitude to pixels through the projection's stream, null when clipped. */

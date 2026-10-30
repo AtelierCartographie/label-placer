@@ -4,6 +4,7 @@ import type { LabelInput, PlaceOptions, PlacementResult } from './types.ts';
 export { flushAlignment, leaderGeometry, type LeaderParams } from './leader.ts';
 export { DEFAULT_POSITIONS } from './candidates.ts';
 export { placeZooms, type ZoomLevel, type ZoomResult } from './zooms.ts';
+export { debugMarks, debugSVG, type DebugMark, type DebugOptions } from './debug.ts';
 export { DEFAULT_BLOCK_POSITIONS, placeBlocks, type BlockInput, type BlockOptions, type BlockPosition, type PlacedBlock } from './blocks.ts';
 export type * from './types.ts';
 
