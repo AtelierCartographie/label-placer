@@ -154,6 +154,16 @@ function violations(scene: Scene, r: PlacementResult): string[] {
     if (p.visible !== !!p.box) fail(`label ${i}: a box if and only if shown`);
     if (!p.visible && (p.overlapping || p.leader)) fail(`label ${i}: hidden, yet overlapping or with a leader`);
     if (p.blocked && p.visible) fail(`label ${i}: blocked yet shown`);
+    // Why it is hidden, and who stands in its way.
+    if (p.visible !== (p.reason === null)) fail(`label ${i}: a reason if and only if hidden`);
+    if (p.blocked !== (p.reason === 'bounds' || p.reason === 'obstacles')) fail(`label ${i}: blocked, yet reason ${p.reason}`);
+    if ((p.group !== null) !== (p.reason === 'group')) fail(`label ${i}: group, yet reason ${p.reason}`);
+    if (!p.visible && !(l.width > 0 && l.height > 0) && p.reason !== 'size') fail(`label ${i}: no size, yet reason ${p.reason}`);
+    if (p.reason === 'stack' && !l.dodge) fail(`label ${i}: reason stack, not dodged`);
+    if (p.reason === 'labels' && !p.by.length && !p.byGroups.length) fail(`label ${i}: hidden by labels, none named: a free spot left`);
+    if (p.reason !== 'labels' && (p.by.length || p.byGroups.length)) fail(`label ${i}: by, yet reason ${p.reason}`);
+    for (const k of p.by) if (!r.labels[k]?.visible) fail(`label ${i}: by label ${k}, not shown`);
+    for (const k of p.byGroups) if (!r.groups[k]?.visible) fail(`label ${i}: by group ${k}, not shown`);
     if (p.group !== null && p.visible) fail(`label ${i}: named by group ${p.group}, yet shown`);
     if (!(l.width > 0 && l.height > 0) && p.visible) fail(`label ${i}: no size, yet shown`);
     // Never hidden: required and pinned labels, unless a group names them.

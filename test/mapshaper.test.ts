@@ -59,6 +59,8 @@ describe('labels (Mapshaper)', () => {
     const props = target.geojson.features.map((f) => f.properties);
     expect(props.map((p) => p.lp_visible)).toEqual([true, false, false]);
     expect(props[1].lp_blocked).toBe(false);
+    expect(props.map((p) => p.lp_reason)).toEqual([null, 'labels', 'size']);
+    expect(props.map((p) => p.lp_by)).toEqual(['', 'Alpha', '']);
   });
 
   it('names a polygon inside its outline, on two lines or by its short form if need be', async () => {

@@ -11,8 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Property tests: on 60 random scenes mixing every feature, the counts and flags agree, nothing shown and not flagged overlaps, crowds the spacing, crosses a leader, leaves the bounds or lies on a hard obstacle, required and pinned labels are shown, and the result is the same twice, and again with itself as `previous`
 
+- `PlacedLabel.reason`: why a label is hidden (`size`, `group`, `bounds`, `obstacles`, `labels`, `stack`), and `by` and `byGroups`: the labels and blocks on the spot it would get with the fewest of them in the way
+- `placeText({ debug })`: the reason in each hidden label's title, and a dashed line to the labels in its way; Mapshaper: `lp_reason` and `lp_by` (their names) written back to the layer
+
 ### Fixed
 
+- Hidden labels take the spots that polishing, columns or groups freed: no label is left hidden by nothing
 - A required symbol without a label (no size) no longer gets an empty box and a leader to nothing
 - A group's block no longer pushes aside a required label, which could then find no room
 - Callouts whose anchor lies in their own column or row, or whose symbol reaches the label: a straight leader, or none, instead of one leaving the bounds

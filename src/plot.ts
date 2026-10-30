@@ -1,5 +1,5 @@
 import { placeLabels } from './index.ts';
-import type { LabelInput, LabelMode, Obstacle, PlaceOptions, PlacementResult, Point } from './types.ts';
+import type { LabelInput, LabelMode, Obstacle, PlaceOptions, PlacedLabel, PlacementResult, Point } from './types.ts';
 
 /**
  * Observable Plot adapter: a `render` function for a text mark, which places its labels and
@@ -99,7 +99,7 @@ export interface PlotPlacementOptions extends Omit<PlaceOptions, 'bounds' | 'obs
   /**
    * Show what to look at: overlapping labels in red, and at the anchor of each hidden label a
    * red cross when it was `blocked` (obstacles, bounds), a red ring when other labels took
-   * its room. A `<title>` names it.
+   * its room, with a dashed line to each of them. A `<title>` names it and says why.
    */
   debug?: boolean;
 }
@@ -165,7 +165,19 @@ export function placeText(options: PlotPlacementOptions = {}): Render {
       const el = texts[k];
       if (!p.visible || !p.box) {
         el.remove();
-        if (debug && labels[k].width > 0) marks.append(hiddenMark(doc, labels[k].x, labels[k].y, p.blocked, el.textContent ?? ''));
+        if (debug && labels[k].width > 0) {
+          const by = p.by.map((b) => result.labels[b]);
+          marks.append(hiddenMark(doc, labels[k].x, labels[k].y, p, el.textContent ?? '', p.by.map((b) => texts[b].textContent ?? '')));
+          // A dashed line to each label in its way.
+          for (const q of by) {
+            if (!q.box) continue;
+            const line = doc.createElementNS(SVG, 'path');
+            line.setAttribute('d', `M${labels[k].x},${labels[k].y}L${(q.box[0] + q.box[2]) / 2},${(q.box[1] + q.box[3]) / 2}`);
+            line.setAttribute('stroke-dasharray', '2,2');
+            line.setAttribute('stroke-width', '0.5');
+            marks.append(line);
+          }
+        }
         return;
       }
       // Centered on its box, with Plot's own middle baseline.
@@ -198,11 +210,19 @@ function measurer(doc: Document): (text: string, font: string, size: number) => 
   };
 }
 
-function hiddenMark(doc: Document, x: number, y: number, blocked: boolean, name: string): SVGElement {
+const REASONS: Record<string, string> = {
+  bounds: 'no spot within the frame',
+  obstacles: 'no spot clear of the obstacles',
+  labels: 'its room taken by other labels',
+  group: 'named by a group',
+  stack: 'no room left in its stack'
+};
+
+function hiddenMark(doc: Document, x: number, y: number, p: PlacedLabel, name: string, by: string[]): SVGElement {
   const e = doc.createElementNS(SVG, 'path');
-  e.setAttribute('d', blocked ? `M${x - 3},${y - 3}L${x + 3},${y + 3}M${x - 3},${y + 3}L${x + 3},${y - 3}` : `M${x + 4},${y}A4,4 0 1,1 ${x - 4},${y}A4,4 0 1,1 ${x + 4},${y}`);
+  e.setAttribute('d', p.blocked ? `M${x - 3},${y - 3}L${x + 3},${y + 3}M${x - 3},${y + 3}L${x + 3},${y - 3}` : `M${x + 4},${y}A4,4 0 1,1 ${x - 4},${y}A4,4 0 1,1 ${x + 4},${y}`);
   const title = doc.createElementNS(SVG, 'title');
-  title.textContent = `${name}: ${blocked ? 'no spot clear of the obstacles' : 'its room taken by other labels'}`;
+  title.textContent = `${name}: ${by.length ? 'hidden by ' + by.join(', ') : (REASONS[p.reason ?? ''] ?? 'hidden')}`;
   e.append(title);
   return e;
 }

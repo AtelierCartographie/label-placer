@@ -196,6 +196,17 @@ export interface PlaceOptions {
   groups?: GroupInput[];
 }
 
+/**
+ * Why a label is hidden:
+ * - `size`: it has no width or height, a symbol alone;
+ * - `group`: a group's block names it instead (`group`);
+ * - `bounds`: every spot falls out of the bounds;
+ * - `obstacles`: every spot falls on a hard obstacle (or its own outline), or out of the bounds;
+ * - `labels`: other labels, or groups' blocks, took its room; `by` and `byGroups` tell which;
+ * - `stack`: dodged, and its stack had no room left for it.
+ */
+export type HiddenReason = 'size' | 'group' | 'bounds' | 'obstacles' | 'labels' | 'stack';
+
 export interface PlacedLabel {
   index: number;
   id: string | number | undefined;
@@ -223,6 +234,16 @@ export interface PlacedLabel {
    * priorities.
    */
   blocked: boolean;
+  /** Why a hidden label is hidden; null when shown. */
+  reason: HiddenReason | null;
+  /**
+   * For a label hidden by others (`reason: 'labels'`): the labels shown on the spot it would
+   * get with the fewest of them in the way, the cheapest first among those, by index. Lower
+   * their priority, or raise this one's, to swap them. Empty otherwise.
+   */
+  by: number[];
+  /** The same for the blocks of groups on that spot, by index in `result.groups`. */
+  byGroups: number[];
   /** Index of the group whose block names this label instead, or null. */
   group: number | null;
 }

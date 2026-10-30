@@ -572,6 +572,30 @@ describe('placeLabels', () => {
     expect(left.labels[0].box![2]).toBe(98);
   });
 
+  it('tells why each hidden label is hidden, and which labels stand in its way', () => {
+    const at = (id: string, x: number, y: number, extra: Partial<LabelInput> = {}): LabelInput => ({ id, x, y, width: 40, height: 10, symbol: { type: 'circle', radius: 2 }, leader: false, ...extra });
+    const r = placeLabels(
+      [
+        // Too wide for the page on every side.
+        at('wide', 100, 100, { width: 300 }),
+        // Walled in by a hard obstacle.
+        at('walled', 300, 100),
+        // Two on one spot, with one position: the lower one goes, behind the higher one.
+        at('high', 100, 200, { priority: 2 }),
+        at('low', 100, 200, { priority: 1, width: 60 }),
+        // A symbol alone.
+        at('symbol', 300, 200, { width: 0, height: 0 })
+      ],
+      { bounds: [0, 0, 400, 300], positions: ['right'], obstacles: [{ type: 'rect', box: [230, 60, 370, 140] }] }
+    );
+    const [wide, walled, high, low, symbol] = r.labels;
+    expect(wide).toMatchObject({ visible: false, reason: 'bounds', blocked: true, by: [] });
+    expect(walled).toMatchObject({ visible: false, reason: 'obstacles', blocked: true, by: [] });
+    expect(high).toMatchObject({ visible: true, reason: null, by: [] });
+    expect(low).toMatchObject({ visible: false, reason: 'labels', blocked: false, by: [2], byGroups: [] });
+    expect(symbol).toMatchObject({ visible: false, reason: 'size', by: [] });
+  });
+
   it('keeps clear space between labels, thinning the dense areas first', () => {
     const spaced = placeLabels(labels, { ...options, spacing: 6 });
     const gap = (a: Box, b: Box) => Math.max(a[0] - b[2], b[0] - a[2], a[1] - b[3], b[1] - a[3]);

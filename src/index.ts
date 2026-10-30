@@ -29,7 +29,10 @@ export function placeLabels(labels: LabelInput[], options: PlaceOptions): Placem
   }
   placer.force();
   placer.group();
-  if (options.align === 'columns') placer.align();
+  if (options.align === 'columns') {
+    placer.align();
+    placer.fill();
+  }
   const t3 = performance.now();
   return placer.result({ setup: t1 - t0, greedy: t2 - t1, optimize: t3 - t2 });
 }

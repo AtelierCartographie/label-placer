@@ -166,7 +166,7 @@ The same engine serves maps with opposite aims; the options set the aim.
 
 **A blank base map with every name** (France by départements, Europe by countries): all labels `required`, nothing hidden. Offer the layouts a cartographer would use when a name does not fit: two lines, then an abbreviation or a number at a cost above the spots next to the feature and below any leader (8, plus its rank and length): `cost: 10` sets a number only where a leader looms, as in an atlas. On the 96 départements of an A4 page at 10 px, 27 leaders give way to 21 numbers and 6 leaders. A `required` label with no free spot left, even after the ejection chains, tries leader rings farther out (up to 11 label heights beyond the last one, out of the other areas, so at sea) before it overlaps. `result.stats.overlapping` tells whether the page is too small for the text size. On the 50 countries of Europe (Natural Earth 1:110m, A4 page), names alone leave 1 to 4 overlaps from 8 to 12 px, all in the Balkans; with ISO codes as a last layout at cost 10, none from 8 to 10 px: a dozen codes, from Belgium to the Caucasus, for a key beside the map.
 
-**A map made in code** (Observable Plot, R, Mapshaper, a script): the result is read, adjusted and run again. `placeLabels` is deterministic under its work budget, so a change in the data or the options is the only change in the result. Pin what you settled with `mode: 'pinned'` and `offset` (taken from a previous result), pass `previous` to keep the rest where it was, and read the result to find the labels left to look at: `overlapping`, `ring > 0`, and the hidden ones, `blocked` when every spot falls on a static obstacle or out of bounds (look at the obstacles, the bounds or the size), crowded out by other labels otherwise (look at the priorities, the spacing, the text size). With Observable Plot, `placeText` does all this in a text mark (see Rendering), and `debug: true` marks these labels on the map. With Mapshaper, `labels` writes `lp_visible`, `lp_blocked` and `lp_overlapping` back to the layer, for `-filter`, `-info` or a CSV.
+**A map made in code** (Observable Plot, R, Mapshaper, a script): the result is read, adjusted and run again. `placeLabels` is deterministic under its work budget, so a change in the data or the options is the only change in the result. Pin what you settled with `mode: 'pinned'` and `offset` (taken from a previous result), pass `previous` to keep the rest where it was, and read the result to find the labels left to look at: `overlapping`, `ring > 0`, and the hidden ones by their `reason`: `bounds` or `obstacles` when every spot falls out of the bounds or on a static obstacle (look at the bounds, the obstacles or the size), `labels` when other labels took its room (look at the priorities, the spacing, the text size): `by` names the labels on its most accessible spot, the ones to lower, or to raise it above. With Observable Plot, `placeText` does all this in a text mark (see Rendering), and `debug: true` marks these labels on the map, a dashed line from each hidden label to the ones in its way. With Mapshaper, `labels` writes `lp_visible`, `lp_reason`, `lp_by` (their names), `lp_blocked` and `lp_overlapping` back to the layer, for `-filter`, `-info` or a CSV.
 
 ## Rendering
 
@@ -234,7 +234,7 @@ Plot.plot({
 });
 ```
 
-Its options are those of `placeLabels` in pixels, without `bounds` (the plot's frame), plus `land` (GeoJSON, projected: names prefer the sea), `obstacles` (in pixels, or a function of `project(lon, lat)`), `r` (the radius without an `r` channel, 3 for Plot's default dots), `required`, `dodge` (every label dodged to that side, for `Plot.selectLast` on a line chart, with the side margins in the bounds), `lineHeight`, `onPlace(result)` (keep it as the next `previous`) and `debug`: overlapping labels in red, a red cross at the anchor of a `blocked` label, a red ring where other labels took the room. Single-line texts only. `docs/exemple-plot.html` runs it on a map of Europe, on a scatterplot (Gapminder) and on a line chart named at the ends of its lines, each against Plot alone, at the width of the page.
+Its options are those of `placeLabels` in pixels, without `bounds` (the plot's frame), plus `land` (GeoJSON, projected: names prefer the sea), `obstacles` (in pixels, or a function of `project(lon, lat)`), `r` (the radius without an `r` channel, 3 for Plot's default dots), `required`, `dodge` (every label dodged to that side, for `Plot.selectLast` on a line chart, with the side margins in the bounds), `lineHeight`, `onPlace(result)` (keep it as the next `previous`) and `debug`: overlapping labels in red, a red cross at the anchor of a `blocked` label, a red ring where other labels took the room with a dashed line to each of them, the name and the reason in a `<title>`. Single-line texts only. `docs/exemple-plot.html` runs it on a map of Europe, on a scatterplot (Gapminder) and on a line chart named at the ends of its lines, each against Plot alone, at the width of the page.
 
 **Mapshaper**: `labels()`, from `@ateliercartographie/label-placer/mapshaper`, is a function for `-run`. It places the labels of the target layer, points or polygons, and returns the commands that draw them in the SVG output.
 
@@ -257,7 +257,7 @@ mapshaper departements.json -style fill='#eef2f5' stroke='#9aa7b2' \
   -o map.svg target=*
 ```
 
-The labels are placed on the SVG page: `width` and `margin` (pixels) fit `bbox` (projected units, the target layer's by default) to it, and the returned commands start with the matching `-frame`. Point symbols take their radius from the `r` field that `-style r=` writes (or `r`: a number or a field), polygons are labelled at an interior point within their outline. The function writes `lp_visible`, `lp_blocked` and `lp_overlapping` back to the layer, adds a `<layer>-leaders` line layer under a `<layer>-labels` layer of points at their text positions, and styles it with `-labels`: `labelStyle` adds options (`fill`, `halo-width`...), `leaderStyle` styles the leaders. Its other options are those of `placeLabels` in pixels, plus `fontSize`, `fontWeight`, `lineHeight`, `priority` (a field, else the radius), `required` or `mode` (a field), `twoLines`, `short` (a field, at `shortCost`, 10), `leaders` (the share of labels, most important first, that may take a leader), `land` (GeoJSON in projected units, names prefer the sea) and `onPlace`. Text is measured with the metrics of Helvetica and Arial, the fonts the labels name first; the adapter exports that measure, `textWidth(text, fontSize, bold?)`, for scripts in Node. `-require` and `-run` work on the command line, not in the web console: place there, then open the SVG or the layers in mapshaper.org.
+The labels are placed on the SVG page: `width` and `margin` (pixels) fit `bbox` (projected units, the target layer's by default) to it, and the returned commands start with the matching `-frame`. Point symbols take their radius from the `r` field that `-style r=` writes (or `r`: a number or a field), polygons are labelled at an interior point within their outline. The function writes `lp_visible`, `lp_reason`, `lp_by` (the names in the way of a hidden label), `lp_blocked` and `lp_overlapping` back to the layer, adds a `<layer>-leaders` line layer under a `<layer>-labels` layer of points at their text positions, and styles it with `-labels`: `labelStyle` adds options (`fill`, `halo-width`...), `leaderStyle` styles the leaders. Its other options are those of `placeLabels` in pixels, plus `fontSize`, `fontWeight`, `lineHeight`, `priority` (a field, else the radius), `required` or `mode` (a field), `twoLines`, `short` (a field, at `shortCost`, 10), `leaders` (the share of labels, most important first, that may take a leader), `land` (GeoJSON in projected units, names prefer the sea) and `onPlace`. Text is measured with the metrics of Helvetica and Arial, the fonts the labels name first; the adapter exports that measure, `textWidth(text, fontSize, bold?)`, for scripts in Node. `-require` and `-run` work on the command line, not in the web console: place there, then open the SVG or the layers in mapshaper.org.
 
 **MapLibre**: write the result as GeoJSON properties and turn MapLibre's own collision off (`text-allow-overlap` and `text-ignore-placement`), so it does not place the labels again. `text-anchor` names the side of the text at the anchor: a `top-right` placement is `text-anchor: bottom-left`. Leaders go in a `line` layer after `map.unproject`.
 
@@ -290,7 +290,7 @@ The labels are placed on the SVG page: `width` and `margin` (pixels) fit `bbox` 
 
 Costs are in position-rank units: the n-th preferred position costs n.
 
-`PlacedLabel`: `index`, `id`, `visible`, `placement`, `ring`, `layout`, `x`, `y`, `textAnchor`, `baseline`, `offset`, `box`, `leader`, `overlapping`, `blocked` (hidden with no spot clear of the static obstacles and the bounds), `group`.
+`PlacedLabel`: `index`, `id`, `visible`, `placement`, `ring`, `layout`, `x`, `y`, `textAnchor`, `baseline`, `offset`, `box`, `leader`, `overlapping`, `blocked` (hidden with no spot clear of the static obstacles and the bounds), `reason` (why a label is hidden, null when shown: `size`, a symbol alone; `group`, named by a block; `bounds`; `obstacles`; `labels`, other labels took its room; `stack`, no room left in its `dodge` stack), `by` and `byGroups` (for `labels`: the labels and the groups' blocks on the spot it would get with the fewest of them in the way), `group`.
 
 `result.stats`: `placed`, `hidden`, `overlapping`, `blocked`, `work`, `timings`.
 
@@ -306,9 +306,9 @@ Costs are in position-rank units: the n-th preferred position costs n.
 2. **Candidates** are built for each label and filtered against the static obstacles.
 3. **Greedy pass**: by mode then priority, each label takes its first free candidate. Placed labels and their leaders go in a uniform grid.
 4. **Ejection chains**: a hidden label takes a candidate if the one or two labels in its way can move to free spots, directly or by pushing one more label. A label that cannot move is hidden only if it ranks lower.
-5. **Polish**: each label moves to its best-ranked free candidate.
+5. **Polish**: each label moves to its best-ranked free candidate; hidden labels then take the spots these moves freed.
 6. **Groups** (with `groups`): a group with a member left hidden is named by its block instead, pushing aside lower labels if need be; hidden labels then fill the room left.
-7. **Columns** (with `align: 'columns'`): dense clusters are stacked in columns, positions solved by isotonic regression (pool adjacent violators) around the anchors' heights, or in rows above or below them, staggered so that vertical leaders run clear. Callouts use the same stacking along the edges, before the greedy pass.
+7. **Columns** (with `align: 'columns'`): dense clusters are stacked in columns, positions solved by isotonic regression (pool adjacent violators) around the anchors' heights, or in rows above or below them, staggered so that vertical leaders run clear. Callouts use the same stacking along the edges, before the greedy pass; hidden labels then take the room the columns left.
 
 ### Approach
 
@@ -326,14 +326,14 @@ Algorithmic inspirations, none of whose code is reused: Christensen, Marks & Shi
 
 | Scenario                             | Variant        | Total  | Placed | Top 100 placed | Top 1000 placed | Ambiguous |
 | ------------------------------------ | -------------- | ------ | ------ | -------------- | --------------- | --------- |
-| Bretagne, 1,202 communes             | greedy         | 15 ms  | 381    | 85 %           | 36.0 %          | 189       |
-|                                      | ejection chains| 20 ms  | 402    | 86 %           | 38.1 %          | 188       |
+| Bretagne, 1,202 communes             | greedy         | 16 ms  | 381    | 85 %           | 36.0 %          | 189       |
+|                                      | ejection chains| 28 ms  | 406    | 86 %           | 38.4 %          | 190       |
 | Bretagne, 100 largest labelled       | greedy         | 6 ms   | 85     | 85 %           |                 | 42        |
 |                                      | ejection chains| 6 ms   | 88     | 88 %           |                 | 43        |
-| Grand Est + BFC + IdF, 10,066        | greedy         | 69 ms  | 397    | 29 %           | 25.0 %          | 309       |
-|                                      | ejection chains| 106 ms | 416    | 29 %           | 27.3 %          | 307       |
-| France, 34,734                       | greedy         | 111 ms | 409    | 56 %           | 26.1 %          | 339       |
-|                                      | ejection chains| 432 ms | 445    | 56 %           | 28.2 %          | 336       |
+| Grand Est + BFC + IdF, 10,066        | greedy         | 62 ms  | 397    | 29 %           | 25.0 %          | 309       |
+|                                      | ejection chains| 153 ms | 429    | 29 %           | 27.3 %          | 318       |
+| France, 34,734                       | greedy         | 164 ms | 409    | 56 %           | 26.1 %          | 339       |
+|                                      | ejection chains| 477 ms | 450    | 56 %           | 28.2 %          | 340       |
 
 *Ambiguous*: labels next to their symbol with another symbol, not under the label, at least as close. Every commune has a symbol, so in these dense scenes a label rarely finds a spot clear of the smallest ones; without the ambiguity cost, Bretagne counts 218 and its 100 largest 50.
 
@@ -369,7 +369,7 @@ The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `doc
 
 **API and performance**
 
-- Why a label is hidden: a reason for each one (bounds, static obstacle, crowded out by such label, budget spent), and a debug view outside Plot.
+- A debug view outside Plot: the hidden labels, their reasons and the labels in their way, as an SVG layer any renderer can draw.
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.
 

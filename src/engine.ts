@@ -1129,14 +1129,21 @@ export class Placer {
         if (tc) this.place(t, tc);
       }
     }
+    this.fill();
+  }
+
+  /** Hidden labels take the free spots that moves left behind, by mode then priority. */
+  fill(): void {
     for (const i of this.order) {
-      if (this.current[i] || this.isGroup(i) || this.absorbed[i] >= 0 || this.fixed(i)) continue;
+      if (this.current[i] || this.isGroup(i) || this.absorbed[i] >= 0 || this.fixed(i) || !(this.labels[i].width > 0 && this.labels[i].height > 0)) continue;
+      // Ambiguity is costed only once a free spot is in sight, as in the greedy pass.
+      if (!this.feasible[i].some((c) => this.isFree(i, c))) continue;
       const c = this.resolve(i).find((c) => this.isFree(i, c));
       if (c) this.place(i, c);
     }
   }
 
-  /** Move each placed label to its best-ranked free candidate. */
+  /** Move each placed label to its best-ranked free candidate, then let hidden ones take the spots freed. */
   polish(): void {
     for (const i of this.order) {
       const cur = this.current[i];
@@ -1152,9 +1159,12 @@ export class Placer {
         }
       }
     }
+    this.fill();
   }
 
   result(timings: PlacementResult['stats']['timings']): PlacementResult {
+    // Finding who stands in a hidden label's way is not the optimizer's work.
+    const work = this.work;
     const groups: PlacedGroup[] = this.groupInputs.map((g, k) => {
       const p = this.count + k;
       const l = this.labels[p];
@@ -1194,8 +1204,7 @@ export class Placer {
           box: null,
           leader: null,
           overlapping: false,
-          // A dodged label is hidden only for want of room in its stack.
-          blocked: l.width > 0 && l.height > 0 && !l.dodge && this.absorbed[i] < 0 && !this.feasible[i].length && !this.farther[i].length,
+          ...this.hidden(i),
           group: this.absorbed[i] >= 0 ? this.absorbed[i] : null
         };
       const [x, y] = this.textPoint(c);
@@ -1215,6 +1224,9 @@ export class Placer {
         leader: c.leader,
         overlapping: this.forced.has(i) || (this.fixed(i) && this.conflicts(i, c, 1, false).length > 0) || this.outOfBounds(c),
         blocked: false,
+        reason: null,
+        by: [],
+        byGroups: [],
         group: null
       };
     });
@@ -1227,10 +1239,41 @@ export class Placer {
         hidden: labels.length - placed,
         overlapping: labels.filter((l) => l.overlapping).length,
         blocked: labels.filter((l) => l.blocked).length,
-        work: this.work,
+        work,
         timings
       }
     };
+  }
+
+  /** Why hidden label i is hidden, and which labels stand in its way. */
+  private hidden(i: number): Pick<PlacedLabel, 'blocked' | 'reason' | 'by' | 'byGroups'> {
+    const l = this.labels[i];
+    const none = { blocked: false, by: [], byGroups: [] };
+    if (!(l.width > 0 && l.height > 0)) return { ...none, reason: 'size' };
+    if (this.absorbed[i] >= 0) return { ...none, reason: 'group' };
+    // A dodged label is hidden only for want of room in its stack.
+    if (l.dodge) return { ...none, reason: 'stack' };
+    // In order of cost, ambiguity left aside: costing it for every hidden label of a dense map
+    // would take longer than placing them.
+    const clean = [...this.feasible[i], ...this.farther[i]];
+    if (!clean.length) {
+      const [x0, y0, x1, y1] = this.bounds;
+      const out = this.blocked[i].length > 0 && this.blocked[i].every((c) => c.bx0 < x0 || c.by0 < y0 || c.bx1 > x1 || c.by1 > y1);
+      return { ...none, blocked: true, reason: out ? 'bounds' : 'obstacles' };
+    }
+    // The spot with the fewest labels in the way, the cheapest first: one is the least there can be.
+    let by: number[] = [];
+    let fewest = Infinity;
+    for (const c of clean) {
+      // Stopped at as many as the best so far: no better.
+      const others: number[] = this.conflicts(i, c, fewest);
+      if (others.length >= fewest) continue;
+      fewest = others.length;
+      by = others;
+      if (fewest <= 1) break;
+    }
+    by.sort((a, b) => a - b);
+    return { ...none, reason: 'labels', by: by.filter((k) => k < this.count), byGroups: by.filter((k) => k >= this.count).map((k) => k - this.count) };
   }
 
   private textPoint(c: Candidate): Point {

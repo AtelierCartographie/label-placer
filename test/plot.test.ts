@@ -70,7 +70,11 @@ describe('placeText', () => {
     expect(out.children[1].children).toHaveLength(1);
     expect(result!.labels.filter((l) => !l.visible && !l.blocked)).toHaveLength(1);
     const debug = render(['Alpha', 'Beta'], [100, 100], [100, 100], { ...options, debug: true });
-    expect(debug.children[2].children).toHaveLength(1);
+    // A ring at the hidden label's anchor, saying who took its room, and a dashed line to it.
+    const [ring, line] = debug.children[2].children;
+    expect(debug.children[2].children).toHaveLength(2);
+    expect(ring.children[0].textContent).toBe('Beta: hidden by Alpha');
+    expect(line.getAttribute('stroke-dasharray')).toBe('2,2');
   });
 
   it('dodges the names at the ends of lines, right of their anchors', () => {

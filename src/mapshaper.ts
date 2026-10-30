@@ -190,6 +190,9 @@ export async function labels(target: MapshaperTarget, io: MapshaperIO, options: 
     props[prefix + 'visible'] = p.visible;
     props[prefix + 'blocked'] = p.blocked;
     props[prefix + 'overlapping'] = p.overlapping;
+    // Why it is hidden, and the names in its way.
+    props[prefix + 'reason'] = p.reason;
+    props[prefix + 'by'] = p.by.map((k) => String(geojson.features[k].properties?.[field] ?? k)).join(', ');
   }
   target.geojson = geojson;
 
