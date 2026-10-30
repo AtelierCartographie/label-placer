@@ -158,6 +158,10 @@ A label next to its symbol is ambiguous when another symbol, or a bare anchor, i
 
 A leader never crosses another label, another leader, or a hard obstacle, except for a `required` label left with no other way. Across a small (soft) symbol it pays the soft cost of a strip one label height wide. Restrict leaders to the labels that deserve them with `leader: false` on the others.
 
+### Zoom levels
+
+`placeZooms(levels)` places the labels of an interactive map at several zooms, from the most crowded to the roomiest, so that zooming in keeps the names shown and where they were. Each level is `{ zoom?, labels, options }`, projected by the caller at that zoom (anchors, sizes, obstacles, bounds), with the same labels in the same order at every level. A label shown at one level ranks above every other at the next, in its own order, and keeps its place there while it stays free (`previous`): it goes only when no spot is left for it, which a roomier map makes rare, and never overlaps for it. The result gives `levels`, one `PlacementResult` per level, and `minZoom`, the zoom of the first level where each label shows (a tile layer's `minzoom`), or null. On towns around six cities, at four zooms doubling the map: 8 names lost in zooming instead of 29 when each zoom is placed on its own, a third as many moved, 1.4 % fewer names placed in all.
+
 ### Budget and determinism
 
 The greedy pass is deterministic. The optimizer runs ejection chains until its `budget.work` (candidate tests, default 40 per label) is spent, so the same input gives the same output on every machine. `budget.timeMs` adds a wall-clock guard that makes the result machine-dependent when it triggers.
@@ -304,6 +308,10 @@ Costs are in position-rank units: the n-th preferred position costs n.
 
 See Legend and title. `PlacedBlock`: `index`, `id`, `box`, `position`, `cost`, `overlapping`. `DEFAULT_BLOCK_POSITIONS` lists the default positions.
 
+### `placeZooms(levels): ZoomResult`
+
+See Zoom levels. `ZoomLevel`: `zoom?`, `labels`, `options`. `ZoomResult`: `levels`, `minZoom`.
+
 ### `leaderGeometry({ anchor, symbol?, box, style?, symbolGap?, minGap? }): Point[] | null`
 
 ### `flushAlignment(anchor, box): 'start' | 'middle' | 'end'`
@@ -365,11 +373,10 @@ The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `doc
 
 - An exact boundary labeling (minimal total leader length without crossings).
 - Columns on a world map: Central and Eastern Europe still lack room (Russia, Ukraine and Turkey fill the east); leaders routed around labels rather than taking them along.
-- Consistent across zoom levels: a label shown at one zoom stays shown, in the same place if it can, at the next one.
 
 **Adapters and rendering**
 
-- MapLibre or Leaflet: labels placed once per zoom level, instead of the built-in collision detection, served as a GeoJSON source.
+- MapLibre or Leaflet: labels placed once per zoom level with `placeZooms`, instead of the built-in collision detection, served as a GeoJSON source with `minzoom`.
 - A demo page rendering the same placement with SVG, Canvas and deck.gl.
 - Animated transitions: before and after pairs telling the labels that enter, leave or move, for a chart by year.
 - An optional `measure()` helper (Canvas, OffscreenCanvas), from the Helvetica and Arial metrics of the Mapshaper adapter.
