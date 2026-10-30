@@ -42,6 +42,7 @@
     "build:docs": "node scripts/build-docs.ts",
     "test": "vitest run",
     "bench": "node bench/run.ts",
+    "regress": "node scripts/regress.ts",
     "release:patch": "npm version patch && git push && git push --tags",
     "release:minor": "npm version minor && git push && git push --tags",
     "release:major": "npm version major && git push && git push --tags",

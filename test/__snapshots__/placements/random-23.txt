@@ -1,0 +1,54 @@
+# Scène aléatoire 23: 27 shown, 32 hidden, 10 overlapping
+0 #0 | hidden labels
+1 #1 | hidden labels
+2 #2 | hidden labels
+3 #3 | top-left:0:0 317.8,226.2
+4 #4 | hidden labels
+6 #6 | hidden labels
+7 #7 | hidden obstacles
+8 #8 | hidden labels
+9 #9 | hidden obstacles
+10 #10 | hidden obstacles
+11 #11 | bottom-right:1:0 169.2,191.3
+12 #12 | right:0:0 415.0,255.0
+13 #13 | bottom:1:0 105.9,191.9 overlapping
+16 #16 | bottom:2:0 105.5,208.6
+17 #17 | hidden labels
+18 #18 | bottom-left:2:0 320.8,269.4 overlapping
+19 #19 | left:2:0 286.6,245.0
+20 #20 | pinned:0:0 109.6,156.1 overlapping
+21 #21 | top-left:0:0 49.9,139.2
+22 #22 | top-right:1:0 154.5,132.8
+23 #23 | bottom:1:0 105.4,188.5 overlapping
+24 #24 | left:0:0 340.8,256.4
+25 #25 | hidden obstacles
+26 #26 | hidden obstacles
+27 #27 | bottom:0:0 122.9,182.2 overlapping
+28 #28 | right:0:0 170.3,172.1
+29 #29 | top-right:2:0 161.3,130.6 overlapping
+30 #30 | bottom-left:0:0 337.1,263.8 overlapping
+31 #31 | hidden labels
+33 #33 | hidden labels
+34 #34 | bottom-left:0:0 333.5,258.5 overlapping
+35 #35 | hidden labels
+36 #36 | hidden labels
+37 #37 | bottom-right:0:0 166.4,175.6 overlapping
+38 #38 | hidden obstacles
+39 #39 | hidden labels
+41 #41 | bottom:0:1 381.4,276.6
+42 #42 | top:0:0 104.7,131.1
+43 #43 | hidden obstacles
+44 #44 | hidden labels
+45 #45 | hidden labels
+46 #46 | bottom-left:1:0 322.5,275.3
+47 #47 | hidden obstacles
+48 #48 | top:1:0 362.0,210.3
+49 #49 | bottom-left:0:0 74.0,183.2
+50 #50 | margin:1:0 390.7,314.0
+51 #51 | hidden labels
+52 #52 | hidden labels
+53 #53 | hidden obstacles
+54 #54 | top:2:0 384.7,186.6
+56 #56 | right:0:0 419.7,237.8
+57 #57 | dodge:0:0 158.8,151.1 overlapping
+58 #58 | hidden obstacles

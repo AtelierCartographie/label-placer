@@ -1,0 +1,102 @@
+# Scène aléatoire 7: 27 shown, 83 hidden, 16 overlapping
+0 #0 | hidden obstacles
+1 #1 | hidden labels
+2 #2 | hidden obstacles
+3 #3 | hidden obstacles
+4 #4 | hidden labels
+6 #6 | hidden labels
+7 #7 | hidden labels
+8 #8 | bottom:2:0 288.2,159.9
+10 #10 | hidden labels
+11 #11 | bottom-right:1:0 326.1,138.7
+12 #12 | hidden labels
+13 #13 | hidden obstacles
+14 #14 | hidden labels
+15 #15 | hidden labels
+16 #16 | hidden obstacles
+17 #17 | hidden labels
+18 #18 | bottom-left:2:0 84.3,228.3
+19 #19 | right:1:0 337.1,72.9
+20 #20 | hidden labels
+21 #21 | bottom:0:0 113.8,196.1 overlapping
+22 #22 | hidden labels
+23 #23 | bottom:1:0 252.9,134.9 overlapping
+25 #25 | center:0:0 260.8,59.5
+26 #26 | hidden obstacles
+27 #27 | hidden obstacles
+28 #28 | hidden labels
+29 #29 | hidden obstacles
+30 #30 | hidden labels
+31 #31 | dodge:0:0 346.9,115.6 overlapping
+32 #32 | hidden labels
+33 #33 | bottom:0:0 241.4,126.5
+34 #34 | hidden obstacles
+35 #35 | top-left:0:0 83.5,125.6 overlapping
+36 #36 | hidden labels
+37 #37 | hidden labels
+38 #38 | hidden labels
+39 #39 | hidden obstacles
+40 #40 | hidden obstacles
+41 #41 | hidden obstacles
+42 #42 | hidden labels
+43 #43 | hidden obstacles
+44 #44 | hidden obstacles
+45 #45 | hidden labels
+46 #46 | hidden labels
+47 #47 | hidden obstacles
+48 #48 | hidden obstacles
+49 #49 | hidden labels
+50 #50 | hidden obstacles
+51 #51 | hidden obstacles
+52 #52 | hidden labels
+53 #53 | bottom-right:2:0 203.0,200.5 overlapping
+54 #54 | pinned:0:0 172.5,158.7 overlapping
+55 #55 | left:0:0 50.2,150.0
+56 #56 | hidden labels
+57 #57 | top:3:0 289.4,42.1 overlapping
+58 #58 | top:2:0 193.8,88.5 overlapping
+59 #59 | hidden labels
+61 #61 | hidden labels
+63 #63 | dodge:0:0 234.7,91.6 overlapping
+64 #64 | hidden labels
+66 #66 | hidden obstacles
+67 #67 | hidden obstacles
+68 #68 | hidden labels
+69 #69 | hidden labels
+70 #70 | hidden labels
+71 #71 | hidden obstacles
+72 #72 | bottom:2:1 166.2,218.0
+73 #73 | hidden obstacles
+74 #74 | hidden labels
+75 #75 | top:2:0 304.6,38.1
+76 #76 | hidden labels
+77 #77 | hidden labels
+78 #78 | pinned:0:0 321.9,101.2
+79 #79 | hidden obstacles
+80 #80 | hidden obstacles
+81 #81 | bottom-right:1:0 206.3,193.0 overlapping
+82 #82 | dodge:0:0 52.8,195.3
+83 #83 | hidden obstacles
+84 #84 | hidden labels
+85 #85 | hidden labels
+86 #86 | hidden obstacles
+87 #87 | hidden labels
+88 #88 | hidden labels
+89 #89 | hidden obstacles
+90 #90 | hidden labels
+91 #91 | bottom-right:1:0 323.5,127.2 overlapping
+92 #92 | pinned:0:0 134.3,112.0 overlapping
+94 #94 | hidden labels
+95 #95 | hidden labels
+96 #96 | margin:1:0 174.5,7.0 overlapping
+97 #97 | pinned:0:0 199.5,196.9 overlapping
+98 #98 | dodge:0:0 219.7,149.8 overlapping
+99 #99 | hidden obstacles
+100 #100 | hidden obstacles
+101 #101 | hidden obstacles
+102 #102 | hidden obstacles
+104 #104 | hidden obstacles
+105 #105 | margin:1:0 123.6,7.0 overlapping
+106 #106 | hidden obstacles
+107 #107 | hidden labels
+109 #109 | hidden obstacles

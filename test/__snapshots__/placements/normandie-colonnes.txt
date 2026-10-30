@@ -1,0 +1,401 @@
+# Normandie, espacement et colonnes: 223 shown, 2419 hidden, 0 overlapping
+2 Val-au-Perche | top:0:0 689.9,678.3
+11 La Rivière-Saint-Sauveur | column:1:0 486.9,254.9
+16 Pont-l'Évêque | bottom:2:0 575.1,330.8
+32 Touques | column:1:0 521.0,273.4
+42 Honfleur | column:1:0 521.0,240.8
+44 Trouville-sur-Mer | hidden labels
+45 Ranville | hidden labels
+46 Hérouvillette | hidden labels
+51 Bavent | hidden labels
+55 Cabourg | hidden labels
+63 Dozulé | right:0:0 536.7,314.8
+69 Villers-sur-Mer | bottom-right:0:0 564.3,289.5
+75 Dives-sur-Mer | hidden labels
+76 Ouistreham | right:0:0 495.1,295.2
+81 Bernières-sur-Mer | column:1:0 385.4,235.5
+84 Saint-Aubin-sur-Mer | hidden labels
+85 Douvres-la-Délivrande | hidden labels
+87 Mathieu | hidden labels
+90 Luc-sur-Mer | hidden labels
+93 Biéville-Beuville | hidden labels
+94 Lion-sur-Mer | hidden labels
+95 Blainville-sur-Orne | top:2:0 453.9,278.2
+96 Colleville-Montgomery | hidden labels
+98 Bénouville | hidden labels
+99 Hermanville-sur-Mer | hidden labels
+100 Saint-Contest | hidden labels
+101 Colomby-Anguerny | hidden labels
+103 Colombelles | top-right:0:0 484.5,312.1
+104 Hérouville-Saint-Clair | hidden labels
+105 Thaon | hidden labels
+106 Cambes-en-Plaine | hidden labels
+107 Authie | hidden labels
+150 Mézidon Vallée d'Auge | bottom-right:0:0 561.5,385.9
+153 Valambray | hidden labels
+155 Moult-Chicheboville | hidden labels
+158 Frénouville | bottom:2:0 465.9,382.1
+160 Cagny | hidden labels
+166 Démouville | hidden labels
+168 Cuverville | hidden labels
+172 Saline | right:2:0 525.1,332.3
+178 Argences | right:1:0 523.5,353.3
+186 Le Castelet | hidden labels
+187 Laize-Clinchamps | hidden labels
+189 Fontenay-le-Marmion | hidden labels
+190 Castine-en-Plaine | hidden labels
+191 May-sur-Orne | hidden labels
+194 Esquay-Notre-Dame | hidden labels
+196 Bourguébus | hidden labels
+197 Baron-sur-Odon | hidden labels
+199 Mouen | hidden labels
+201 Saint-Germain-la-Blanche-Herbe | hidden labels
+202 Ifs | bottom:0:0 440.1,360.4
+203 Bretteville-sur-Odon | left:0:0 377.2,335.6
+204 Fleury-sur-Orne | bottom-left:0:0 395.0,352.9
+205 Mondeville | bottom-right:0:0 475.3,342.9
+206 Cormelles-le-Royal | hidden labels
+208 Giberville | hidden labels
+209 Caen | top:0:0 434.9,307.9
+210 Verson | hidden labels
+211 Louvigny | hidden labels
+212 Fontaine-Étoupefour | hidden labels
+213 Éterville | hidden labels
+217 Orbec | hidden labels
+227 Valorbiquet | hidden labels
+246 Potigny | right:0:0 484.7,412.4
+248 Falaise | top-right:0:0 493.4,431.2
+287 Saint-Désir | bottom-right:1:0 614.9,369.1
+288 Lisieux | bottom-left:1:0 554.2,369.7
+291 Vimoutiers | bottom:0:0 574.0,442.3
+292 Livarot-Pays-d'Auge | right:0:0 610.3,402.8
+310 Clécy | hidden labels
+317 Cesny-les-Sources | bottom:2:0 430.6,438.0
+326 Bretteville-sur-Laize | hidden labels
+333 Le Hom | hidden labels
+365 Saint-Pierre-en-Auge | bottom-right:2:0 581.9,422.0
+372 Saint-Sulpice-sur-Risle | right:0:0 738.2,492.2
+383 Tourouvre au Perche | top:0:0 683.7,553.8
+400 La Ferté-en-Ouche | top:0:0 651.4,457.4
+411 Rai | top:0:0 667.4,492.8
+416 L'Aigle | bottom:0:0 680.0,509.7
+426 Briouze | right:0:0 450.2,514.1
+427 La Ferté Macé | right:0:0 465.1,555.4
+436 Putanges-le-Lac | right:0:0 497.4,490.2
+446 Magny-le-Désert | bottom:0:0 436.6,573.2
+488 Chailloué | right:0:0 593.0,537.2
+502 Écouché-les-Vallées | bottom-right:0:0 534.8,518.1
+528 Argentan | right:2:0 567.4,500.2
+529 Boischampré | bottom-left:0:0 491.0,538.8
+536 Gouffern en Auge | top:2:0 539.4,463.0
+559 Sées | bottom:0:0 563.0,565.2
+592 Rives d'Andaine | bottom:1:0 397.6,597.4
+617 Mortagne-au-Perche | left:0:0 609.4,590.3
+618 Rémalard en Perche | right:0:0 760.3,626.4
+622 Longny les Villages | top:0:0 708.5,577.4
+626 Écouves | top:0:0 543.8,582.8
+635 Condé-sur-Sarthe | column:1:0 472.7,612.0
+637 Saint-Germain-du-Corbéis | column:1:0 456.4,640.3
+645 Damigny | column:1:0 490.8,597.8
+647 Alençon | column:1:0 492.3,626.1
+655 Juvigny Val d'Andaine | left:0:0 340.2,567.9
+661 Domfront en Poiraie | top-right:1:0 409.0,532.9
+672 Messei | left:0:0 365.2,507.1
+676 Flers | right:0:0 397.2,492.0
+677 La Lande-Patry | hidden labels
+679 Tinchebray-Bocage | left:0:0 292.4,485.3
+730 Le Molay-Littry | left:0:0 274.8,301.5
+732 Bayeux | bottom-left:0:0 333.7,301.3
+733 Saint-Vigor-le-Grand | top:0:0 358.3,279.2
+734 Vire Normandie | top-right:0:0 338.9,443.9
+737 Souleuvre en Bocage | right:0:0 364.2,417.6
+738 Balleroy-sur-Drôme | hidden labels
+740 Val de Drôme | top:0:0 321.6,355.2
+742 Caumont-sur-Aure | hidden labels
+749 Seulline | hidden labels
+750 Valdallière | bottom:0:0 352.9,463.1
+752 Villers-Bocage | bottom-right:0:0 397.1,374.9
+765 Athis-Val de Rouvre | right:0:0 443.7,469.8
+768 Condé-en-Normandie | right:0:0 432.4,453.9
+775 Les Monts d'Aunay | bottom:0:0 367.9,400.0
+793 Val d'Arry | hidden labels
+813 Saint-Manvieu-Norrey | hidden labels
+814 Carpiquet | top-left:2:0 377.2,302.6
+816 Rots | hidden labels
+818 Cairon | hidden labels
+819 Moulins en Bessin | hidden labels
+823 Creully sur Seulles | hidden labels
+828 Courseulles-sur-Mer | column:1:0 373.0,249.6
+848 Thue et Mue | left:0:0 367.8,318.6
+851 Tilly-sur-Seulles | hidden labels
+853 Audrieu | hidden labels
+855 Ceaucé | bottom-left:0:0 340.7,596.4
+874 Isigny-sur-Mer | top:1:0 255.8,246.1
+883 Noues de Sienne | bottom:0:0 260.2,462.4
+904 Ceton | right:0:0 720.5,704.0
+907 Gournay-en-Bray | right:0:0 1000.5,232.0
+908 Ferrières-en-Bray | hidden labels
+931 Forges-les-Eaux | right:0:0 955.4,180.6
+978 Blangy-sur-Bresle | top-right:0:0 980.5,50.4
+988 Buchy | top-right:0:0 886.7,181.2
+1000 Neufchâtel-en-Bray | column:1:0 943.8,128.9
+1056 Goderville | left:0:0 599.2,160.7
+1086 Fécamp | top-left:0:0 607.3,107.6
+1106 Sainte-Adresse | hidden obstacles
+1108 Fontaine-la-Mallet | column:1:0 496.7,203.4
+1109 Montivilliers | top-left:2:0 532.6,169.2
+1110 Fontenay | top-right:0:0 601.5,181.8
+1112 Cauville-sur-Mer | top:2:0 566.3,144.0
+1118 Saint-Jouin-Bruneval | hidden labels
+1128 Rogerville | hidden labels
+1129 Gainneville | hidden labels
+1132 Criquetot-l'Esneval | hidden labels
+1134 Gonfreville-l'Orcher | bottom-right:2:0 653.5,241.4
+1139 Octeville-sur-Mer | column:1:0 496.7,189.2
+1140 Harfleur | top-right:0:0 605.3,201.0
+1141 Le Havre | column:1:0 512.7,217.6
+1142 Saint-Vigor-d'Ymonville | hidden obstacles
+1149 Saint-Romain-de-Colbosc | hidden labels
+1161 Angerville-l'Orcher | hidden labels
+1174 Saint-Nicolas-de-la-Taille | hidden labels
+1175 Bolbec | right:0:0 673.3,188.8
+1176 Nointot | top:0:0 651.8,169.4
+1179 Gruchet-le-Valasse | hidden labels
+1193 Yébleron | right:0:0 690.9,167.0
+1197 Port-Jérôme-sur-Seine | hidden labels
+1199 Petiville | top-right:0:0 697.2,223.7
+1200 Tancarville | hidden labels
+1201 La Frénaye | hidden labels
+1202 Lillebonne | bottom-left:0:0 638.0,220.1
+1204 Criel-sur-Mer | left:0:0 829.2,25.6
+1206 Le Tréport | column:1:0 929.0,7.9
+1208 Eu | column:1:0 911.6,22.1
+1235 Saint-Nicolas-d'Aliermont | column:1:0 957.0,84.2
+1236 Arques-la-Bataille | column:1:0 941.9,70.1
+1237 Envermeu | hidden labels
+1243 Petit-Caux | right:0:0 867.6,47.8
+1249 Saint-Aubin-Celloville | hidden labels
+1250 La Neuville-Chant-d'Oisel | hidden labels
+1251 Saint-Étienne-du-Rouvray | column:1:0 956.3,267.1
+1252 Belbeuf | hidden labels
+1253 Boos | hidden labels
+1254 Mesnil-Raoul | hidden labels
+1255 Franqueville-Saint-Pierre | hidden labels
+1256 Montmain | hidden labels
+1257 Le Mesnil-Esnard | column:1:0 893.0,255.0
+1260 Bonsecours | hidden obstacles
+1261 Saint-Léger-du-Bourg-Denis | hidden labels
+1262 Saint-Jacques-sur-Darnétal | hidden labels
+1263 Bihorel | hidden obstacles
+1264 Roncherolles-sur-le-Vivier | hidden labels
+1265 Servaville-Salmonville | top-right:1:0 904.8,214.4
+1267 Préaux | hidden labels
+1268 Isneauville | hidden labels
+1280 Blainville-Crevon | bottom-right:1:0 901.7,238.2
+1282 Fontaine-le-Bourg | column:1:0 892.6,197.6
+1286 Bosc-Guérard-Saint-Adrien | hidden labels
+1287 Bois-Guillaume | hidden labels
+1288 Amfreville-la-Mi-Voie | hidden labels
+1290 Darnétal | hidden labels
+1292 Quincampoix | hidden labels
+1303 Saint-Martin-Osmonville | hidden labels
+1308 Saint-Victor-l'Abbaye | hidden labels
+1337 Saint-Saëns | column:1:0 929.6,157.2
+1341 Saint-Pierre-lès-Elbeuf | hidden labels
+1343 Tourville-la-Rivière | hidden labels
+1344 Oissel | left:2:0 756.3,282.3
+1346 Pavilly | top-left:0:0 750.8,184.9
+1347 Hénouville | hidden labels
+1350 Roumare | hidden obstacles
+1354 La Vaupalière | hidden labels
+1359 Petit-Couronne | left:0:0 746.3,264.5
+1361 Canteleu | top-left:0:0 764.6,227.6
+1362 Le Houlme | hidden labels
+1363 Maromme | top-right:0:0 817.2,217.0
+1364 Malaunay | top:2:0 790.6,176.2
+1365 Eslettes | hidden labels
+1366 Notre-Dame-de-Bondeville | hidden labels
+1367 Déville-lès-Rouen | hidden labels
+1368 Le Grand-Quevilly | hidden labels
+1369 Le Petit-Quevilly | left:0:0 748.2,247.6
+1371 Mont-Saint-Aignan | hidden obstacles
+1373 Houppeville | hidden labels
+1374 Sotteville-lès-Rouen | hidden obstacles
+1375 Rouen | right:0:0 837.2,242.9
+1376 Montville | top-right:2:0 838.8,176.6
+1377 Barentin | left:0:0 743.3,203.1
+1403 Rouxmesnil-Bouteilles | hidden labels
+1412 Bacqueville-en-Caux | right:0:0 828.4,111.8
+1420 Offranville | top-left:0:0 771.2,70.9
+1423 Luneray | right:0:0 784.4,95.1
+1425 Dieppe | top:0:0 803.6,44.3
+1438 Yerville | right:0:0 778.5,155.6
+1445 Val-de-Saâne | top:0:0 773.8,132.2
+1463 Val-de-Scie | column:1:0 928.3,143.1
+1466 Grand-Couronne | hidden labels
+1467 Saint-Aubin-lès-Elbeuf | hidden labels
+1468 Caudebec-lès-Elbeuf | hidden labels
+1469 Cléon | bottom-right:1:0 811.7,310.3
+1470 La Bouille | hidden labels
+1472 La Londe | hidden labels
+1473 Elbeuf | column:1:0 766.6,340.8
+1475 Saint Martin de l'If | hidden labels
+1477 Sainte-Marguerite-sur-Duclair | hidden obstacles
+1481 Duclair | hidden labels
+1484 Anneville-Ambourville | hidden labels
+1491 Saint-Pierre-de-Varengeville | hidden labels
+1497 Doudeville | top:1:0 729.5,112.6
+1523 Étoutteville | hidden labels
+1537 Saint-Arnoult | hidden labels
+1540 Maulévrier-Sainte-Gertrude | hidden obstacles
+1541 Rives-en-Seine | hidden labels
+1543 Le Trait | top-left:1:0 701.6,206.5
+1546 Arelaune-en-Seine | hidden labels
+1556 Auzebosc | hidden labels
+1564 Les Hauts-de-Caux | hidden labels
+1565 Terres-de-Caux | top:0:0 680.8,149.1
+1582 Ourville-en-Caux | left:0:0 646.8,130.6
+1589 Yvetot | top-right:0:0 739.4,164.3
+1590 Cany-Barville | left:0:0 660.6,109.0
+1608 Saint-Valery-en-Caux | top-left:0:0 666.5,69.3
+1616 Marcilly-sur-Eure | hidden labels
+1619 Ivry-la-Bataille | bottom-right:0:0 923.1,466.5
+1622 Croth | top-left:0:0 852.6,462.8
+1624 Ézy-sur-Eure | bottom:1:0 879.6,487.2
+1625 Saint-Georges-Motel | bottom-right:0:0 909.0,503.5
+1644 Mesnils-sur-Iton | bottom:0:0 793.3,471.9
+1646 Breteuil | left:0:0 730.3,472.7
+1647 Verneuil d'Avre et d'Iton | right:0:0 811.0,509.1
+1659 Nonancourt | top:0:0 821.5,488.6
+1661 Gisors | right:0:0 994.1,308.8
+1669 Étrépagny | top:0:0 930.8,287.5
+1697 Vexin-sur-Epte | column:1:0 964.3,358.7
+1714 Vernon | column:1:0 949.5,372.8
+1715 Gasny | column:1:0 947.1,387.0
+1719 Perriers-sur-Andelle | hidden labels
+1721 Charleval | hidden labels
+1753 Ménilles | hidden labels
+1766 Breuilpont | right:0:0 908.4,427.6
+1768 La Chapelle-Longueville | hidden labels
+1769 Saint-Marcel | top-left:0:0 857.6,367.1
+1776 Garennes-sur-Eure | hidden labels
+1777 Pacy-sur-Eure | right:0:0 907.5,407.9
+1778 La Couture-Boussey | hidden labels
+1790 Saint-Aubin-sur-Gaillon | hidden labels
+1791 Le Val d'Hazey | left:0:0 823.9,346.5
+1794 Fleury-sur-Andelle | hidden labels
+1796 Courcelles-sur-Seine | hidden labels
+1804 Les Andelys | column:1:0 930.9,321.1
+1807 Gaillon | column:1:0 948.2,344.5
+1831 Manneville-sur-Risle | hidden labels
+1834 Pont-Audemer | top:0:0 658.9,259.5
+1835 Beuzeville | bottom-right:0:0 640.9,284.2
+1838 Cormeilles | hidden labels
+1845 Épaignes | bottom-left:0:0 616.4,309.5
+1881 Brionne | bottom-right:0:0 728.8,345.0
+1918 Rugles | left:1:0 670.0,476.5
+1929 Gauville-la-Campagne | hidden labels
+1930 Gravigny | top-right:0:0 839.7,384.4
+1946 Clef Vallée d'Eure | hidden labels
+1956 Ailly | hidden labels
+1961 Acquigny | hidden labels
+1968 La Haye-Malherbe | hidden labels
+1971 Le Vaudreuil | hidden labels
+1975 Le Manoir | hidden labels
+1976 Igoville | hidden labels
+1977 Alizay | hidden labels
+1980 Pîtres | hidden labels
+1984 Léry | hidden labels
+1986 Pont-de-l'Arche | top-right:0:0 853.7,286.8
+1987 Val-de-Reuil | column:1:0 929.5,306.9
+1991 Romilly-sur-Andelle | hidden labels
+1994 Saint-Pierre-du-Vauvray | hidden labels
+1995 Louviers | right:0:0 848.1,330.5
+1999 Sylvains-Lès-Moulins | hidden labels
+2000 Chambois | bottom:0:0 810.5,448.5
+2001 Grossoeuvre | hidden labels
+2008 Guichainville | hidden labels
+2010 La Bonneville-sur-Iton | hidden labels
+2015 Saint-Sébastien-de-Morsent | top-left:0:0 738.0,399.3
+2018 Évreux | right:0:0 843.3,401.6
+2023 Saint-André-de-l'Eure | column:1:0 977.9,448.2
+2025 Angerville-la-Campagne | hidden labels
+2057 Le Neubourg | bottom-right:0:0 784.9,362.7
+2058 Conches-en-Ouche | right:0:0 804.4,425.1
+2059 Sainte-Colombe-la-Commanderie | hidden labels
+2071 Le Thuit de l'Oison | column:1:0 723.6,326.7
+2082 Bosroumois | hidden labels
+2083 Grand Bourgtheroulde | bottom-left:0:0 696.6,305.9
+2084 Saint-Ouen-de-Thouberville | hidden labels
+2089 Saint-Ouen-du-Tilleul | hidden labels
+2105 Serquigny | hidden labels
+2106 Nassandres sur Risle | top-left:0:0 661.7,351.1
+2114 Le Fidelaire | bottom:0:0 728.8,439.1
+2127 Mesnil-en-Ouche | bottom:0:0 701.9,415.2
+2131 Beaumont-le-Roger | right:0:0 765.0,378.8
+2132 Bernay | right:0:0 698.2,374.2
+2139 Routot | hidden labels
+2159 Rougemontiers | hidden labels
+2172 Bourg-Achard | bottom-left:0:0 700.2,284.6
+2188 Flancourt-Crescy-en-Roumois | hidden labels
+2190 Les Monts du Roumois | hidden labels
+2192 Bosgouet | hidden labels
+2198 Grandparigny | hidden labels
+2217 Sourdeval | bottom:0:0 289.1,507.7
+2225 Mortain-Bocage | right:0:0 320.1,526.5
+2226 Saint-Hilaire-du-Harcouët | right:0:0 300.5,551.4
+2228 Coutances | bottom:0:0 164.8,379.4
+2232 Saint-Sauveur-Villages | top-left:0:0 124.7,327.4
+2233 Périers | top:0:0 176.9,305.8
+2256 Marigny-Le-Lozon | left:0:0 174.5,351.4
+2262 Saint-James | right:1:0 227.0,567.8
+2264 Saint-Quentin-sur-le-Homme | hidden labels
+2285 Ducey-Les Chéris | left:0:0 152.1,532.6
+2294 Gonneville-Le Theil | right:0:0 214.4,144.2
+2323 Les Pieux | bottom-left:0:0 60.1,195.0
+2329 Couville | left:0:0 94.6,172.2
+2335 Teurthéville-Hague | top-left:0:0 64.4,151.4
+2337 Digosville | hidden labels
+2338 Cherbourg-en-Cotentin | top:0:0 133.4,119.6
+2340 La Hague | left:0:0 55.7,129.0
+2344 Brix | bottom-right:0:0 155.3,185.8
+2346 Sottevast | bottom-left:0:0 115.8,194.4
+2347 Tollevast | right:0:0 155.0,165.4
+2348 Flamanville | left:0:0 42.5,177.7
+2349 Martinvast | hidden labels
+2352 Saint-Amand-Villages | hidden labels
+2353 Bourgvallées | bottom-left:2:0 196.1,398.1
+2354 Condé-sur-Vire | right:1:0 315.8,371.5
+2356 Saint-Jean-d'Elle | top:2:0 283.4,322.4
+2358 La Barre-de-Semilly | hidden labels
+2359 Saint-Lô | bottom:0:0 254.8,360.6
+2360 Thèreval | hidden labels
+2371 Pont-Hébert | hidden labels
+2376 Saint-Gilles | hidden labels
+2378 Canisy | bottom-left:0:0 215.1,369.7
+2380 Agneaux | top-left:1:0 219.2,327.4
+2385 Torigny-les-Villes | bottom:0:0 281.2,390.5
+2388 Lessay | left:0:0 126.7,301.6
+2397 La Haye | right:0:0 168.0,274.0
+2400 Carentan-les-Marais | right:0:0 269.0,273.5
+2425 Isigny-le-Buat | top:0:0 224.5,523.8
+2426 Brécey | top:0:0 227.8,484.4
+2449 Villedieu-les-Poêles-Rouffigny | top:0:0 216.4,440.0
+2456 Percy-en-Normandie | left:0:0 178.5,421.4
+2467 Moyon Villages | hidden labels
+2468 Tessy-Bocage | bottom:0:0 259.8,411.7
+2505 Sainte-Mère-Église | top-right:0:0 246.7,223.0
+2510 Picauville | top:0:0 180.1,231.9
+2512 Valognes | top-right:0:0 191.2,183.3
+2513 Gouville-sur-Mer | left:0:0 92.3,347.0
+2514 Agon-Coutainville | bottom-left:0:0 93.5,376.3
+2529 Quettreville-sur-Sienne | left:0:0 105.6,397.5
+2540 Granville | bottom-right:1:0 154.3,463.9
+2544 Donville-les-Bains | top-left:0:0 87.2,433.4
+2564 Fleury | bottom:0:0 203.2,456.2
+2577 Saint-Pair-sur-Mer | bottom-left:0:0 87.1,463.8
+2588 Sartilly-Baie-Bocage | left:0:0 110.0,479.8
+2604 Pontorson | hidden obstacles
+2608 Avranches | right:0:0 207.4,506.1
+2611 Port-Bail-sur-Mer | left:0:0 66.6,254.8
+2637 Bricquebec-en-Cotentin | right:1:0 192.4,204.5

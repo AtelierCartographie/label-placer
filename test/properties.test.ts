@@ -2,109 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { placeBlocks, placeLabels } from '../src/index.ts';
 import { segmentHitsBox, segmentsCross } from '../src/geometry.ts';
 import { pointInRings } from '../src/polygon.ts';
-import type { Box, GroupInput, LabelInput, Obstacle, PlaceOptions, PlacementResult, Point } from '../src/index.ts';
+import type { Box, PlacementResult, Point } from '../src/index.ts';
+import { randomScene, type Scene } from './scenes.ts';
 
 /**
  * Properties of every placement, checked on random scenes that mix every feature: what the
  * engine guarantees whatever the input, as opposed to how it places one scene.
  */
-
-function mulberry32(seed: number) {
-  return () => {
-    let t = (seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-interface Scene {
-  labels: LabelInput[];
-  options: PlaceOptions;
-}
-
-/** A random scene: clustered symbols of every kind, every mode, obstacles of every kind, and options. */
-function randomScene(seed: number): Scene {
-  const rnd = mulberry32(seed);
-  const pick = <T>(items: T[]): T => items[Math.floor(rnd() * items.length)];
-  const chance = (p: number) => rnd() < p;
-  const W = 400 + Math.round(rnd() * 400);
-  const H = 300 + Math.round(rnd() * 300);
-  const unit = 8 + Math.round(rnd() * 6);
-  const n = 20 + Math.floor(rnd() * 130);
-  const centers = Array.from({ length: 1 + Math.floor(rnd() * 5) }, (): Point => [W * (0.1 + 0.8 * rnd()), H * (0.1 + 0.8 * rnd())]);
-  const spread = 40 + rnd() * 200;
-
-  const polygon = (cx: number, cy: number, r: number): Point[] => {
-    const k = 3 + Math.floor(rnd() * 5);
-    return Array.from({ length: k }, (_, j): Point => {
-      const a = (2 * Math.PI * j) / k + rnd() * 0.5;
-      const d = r * (0.6 + 0.4 * rnd());
-      return [cx + d * Math.cos(a), cy + d * Math.sin(a)];
-    });
-  };
-
-  const labels: LabelInput[] = Array.from({ length: n }, (_, i) => {
-    const [cx, cy] = pick(centers);
-    const x = Math.min(W - 2, Math.max(2, cx + (rnd() - 0.5) * spread));
-    const y = Math.min(H - 2, Math.max(2, cy + (rnd() - 0.5) * spread * 0.7));
-    const l: LabelInput = { id: i, x, y, width: unit * (1.5 + rnd() * 6), height: unit, priority: Math.round(rnd() * 1000) };
-    const kind = rnd();
-    if (kind < 0.6) l.symbol = { type: 'circle', radius: rnd() < 0.3 ? 0.5 + rnd() : 1 + rnd() * 12 };
-    else if (kind < 0.7) l.symbol = { type: 'rect', width: 2 + rnd() * 14, height: 2 + rnd() * 14 };
-    else if (kind < 0.78) l.symbol = { type: 'area', inscribedRadius: rnd() * 40 };
-    else if (kind < 0.86) l.symbol = { type: 'polygon', rings: [polygon(x, y, 10 + rnd() * 50)] };
-    // The rest: a bare anchor.
-    const mode = rnd();
-    if (mode < 0.12) l.mode = 'required';
-    else if (mode < 0.16) {
-      l.mode = 'pinned';
-      l.offset = [(rnd() - 0.5) * 4 * unit, (rnd() - 0.5) * 4 * unit];
-    } else if (mode < 0.19) l.callout = pick([true, 'left', 'right', 'top', 'bottom'] as const);
-    else if (mode < 0.22) l.dodge = pick(['left', 'right'] as const);
-    if (chance(0.2)) l.leader = false;
-    if (chance(0.2)) l.layouts = [{ width: l.width * 0.55, height: unit * 2 }, ...(chance(0.5) ? [{ width: unit * 2, height: unit, cost: 10 }] : [])];
-    // A symbol alone.
-    if (chance(0.08)) {
-      l.width = 0;
-      l.height = 0;
-    }
-    return l;
-  });
-
-  const obstacles: Obstacle[] = [];
-  for (let k = Math.floor(rnd() * 4); k > 0; k--) {
-    const x = rnd() * W;
-    const y = rnd() * H;
-    obstacles.push({ type: 'rect', box: [x, y, x + 20 + rnd() * 120, y + 10 + rnd() * 60], soft: chance(0.3) });
-  }
-  if (chance(0.4)) obstacles.push({ type: 'circle', x: rnd() * W, y: rnd() * H, radius: 5 + rnd() * 40, soft: chance(0.3) });
-  if (chance(0.4)) obstacles.push({ type: 'line', points: Array.from({ length: 5 }, (_, j): Point => [(W * j) / 4, H * rnd()]), soft: chance(0.6) });
-  if (chance(0.4)) {
-    // Land: a soft polygon and its coastline.
-    const land = polygon(W / 2, H / 2, Math.min(W, H) * 0.45);
-    obstacles.push({ type: 'polygon', rings: [land], soft: true, cost: 2.5 }, { type: 'line', points: [...land, land[0]], soft: true });
-  }
-  if (chance(0.3)) obstacles.push({ type: 'polygon', rings: [polygon(rnd() * W, rnd() * H, 20 + rnd() * 50)] });
-
-  const groups: GroupInput[] = [];
-  if (chance(0.3)) {
-    const [cx, cy] = centers[0];
-    const members = labels.map((_, i) => i).filter((i) => Math.hypot(labels[i].x - cx, labels[i].y - cy) < spread / 4).slice(0, 8);
-    if (members.length > 1) groups.push({ id: 'g', members, width: unit * 8, height: unit * 2, mode: chance(0.5) ? 'always' : 'auto' });
-  }
-
-  const options: PlaceOptions = {
-    bounds: [0, 0, W, H],
-    obstacles,
-    spacing: chance(0.5) ? 0 : rnd() * unit * 0.8,
-    leader: chance(0.15) ? false : { style: pick(['octilinear', 'orthogonal', 'straight'] as const) },
-    align: chance(0.35) ? 'columns' : 'none',
-    optimize: chance(0.15) ? 'none' : 'chain',
-    groups
-  };
-  return { labels, options };
-}
 
 const EPS = 1e-6;
 const STACKED = new Set(['column', 'margin', 'dodge']);

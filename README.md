@@ -370,11 +370,15 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 
 ```sh
 pnpm install
-pnpm test        # vitest, with properties checked on 60 random scenes (test/properties.test.ts)
+pnpm test        # vitest: properties on 60 random scenes, placements of the reference scenes
+pnpm test -u     # accept the placements a change moved, in test/__snapshots__/placements/
+pnpm regress     # draw what moved: bench/out/regress/index.html
 pnpm build       # type check, ES and CommonJS builds, declarations
 pnpm build:docs  # rebuild the engine embedded in the demo pages (and node scripts/maplibre-data.ts for the MapLibre page's data)
 pnpm bench       # place the names of French communes (see Benchmark)
 ```
+
+A change to the engine that moves a label fails the regression test (`test/regression.test.ts`): the placements of nine reference scenes (Bretagne at A4 in full and with 100 names, Normandie with spacing and columns, the 96 départements as polygons, five random scenes with every feature) are kept as text, one label per line, so that the diff reads label by label. `pnpm regress` draws each scene that changed, the old spot of each label dashed in red, the new one in green, a label gone crossed out; `pnpm test -u` accepts the changes.
 
 The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `docs/` embed their own build of the engine, so that they open without a server: run `pnpm build:docs` after a change to `src/`. The demo page also replays the greedy pass and the ejection chains step by step, and checks that its replay matches `placeLabels`: a change to those passes has to be mirrored in its script.
 
@@ -397,10 +401,6 @@ The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `doc
 - A debug view outside Plot: the hidden labels, their reasons and the labels in their way, as an SVG layer any renderer can draw.
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.
-
-**Quality**
-
-- Visual regression tests of the demo figures, to see every placement a tuned heuristic changes.
 
 Out of scope: labels along lines and curved labels; breaking and measuring text, left to the caller (see Layouts).
 
