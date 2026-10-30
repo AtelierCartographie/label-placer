@@ -1,6 +1,6 @@
 {
   "name": "@ateliercartographie/label-placer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Render-agnostic automatic label placement for maps and charts: ordered candidate positions, priorities, obstacles, leader lines, pinned labels",
   "type": "module",
   "main": "./dist/label-placer.cjs",
