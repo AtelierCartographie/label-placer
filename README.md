@@ -114,7 +114,7 @@ In rows above or below the cluster, each label starts right over its anchor, wit
 
 ### Group labels
 
-`groups: [{ members, width, height, layouts?, priority?, mode?, leader? }]` names a group too dense to name one by one with one block ("Balkans, du nord au sud : Slovénie, Croatie…"), composed and measured by the caller like any label; `members` are indices in the labels given. After the optimizer, a group with a member left hidden (`mode: 'auto'`, the default) has its members' labels taken off and its block set around their extent, symbols included, with a leader when it has to move away: the candidate that pushes aside the fewest labels, of lower priority only (the block's is that of its most important member by default), then the cheapest. Labels pushed aside move to a free spot if they have one. With no room for the block, the members' labels come back. The hidden labels then take the room the members left. `mode: 'always'` sets the block whenever it fits. `result.groups` tells where each block went; a member named by a block has `group` set to its index and is hidden. Pinned labels and callouts are never members.
+`groups: [{ members, width, height, layouts?, priority?, mode?, leader? }]` names a group too dense to name one by one with one block ("Balkans, du nord au sud : Slovénie, Croatie…"), composed and measured by the caller like any label; `members` are indices in the labels given. After the optimizer, a group with a member left hidden (`mode: 'auto'`, the default) has its members' labels taken off and its block set around their extent, symbols included, with a leader when it has to move away: the candidate that pushes aside the fewest labels, of lower priority only (the block's is that of its most important member by default) and never a required one, then the cheapest. Labels pushed aside move to a free spot if they have one. With no room for the block, the members' labels come back. The hidden labels then take the room the members left. `mode: 'always'` sets the block whenever it fits. `result.groups` tells where each block went; a member named by a block has `group` set to its index and is hidden. Pinned labels and callouts are never members.
 
 A group label is a last resort, close to a photo caption that lists the people in the picture: it reads only if the rendering does its share. Open the block with a title that announces the list ("Balkans, du nord au sud :"), give the members' symbols a mark of their own (an outline, a number), and order the names in a way the reader can follow on the map. Those choices belong to the caller.
 
@@ -343,7 +343,7 @@ The top 100 of the larger scenarios is capped by the Paris area, where the large
 
 ```sh
 pnpm install
-pnpm test        # vitest
+pnpm test        # vitest, with properties checked on 60 random scenes (test/properties.test.ts)
 pnpm build       # type check, ES and CommonJS builds, declarations
 pnpm build:docs  # rebuild the engine embedded in the demo pages
 pnpm bench       # place the names of French communes (see Benchmark)
@@ -375,7 +375,6 @@ The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `doc
 
 **Quality**
 
-- Property tests: on random scenes, no overlap outside forced required labels, no label on a hard obstacle, the same result twice.
 - Visual regression tests of the demo figures, to see every placement a tuned heuristic changes.
 
 Out of scope: labels along lines and curved labels; breaking and measuring text, left to the caller (see Layouts).

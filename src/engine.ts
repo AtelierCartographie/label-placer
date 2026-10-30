@@ -535,10 +535,21 @@ export class Placer {
     const buffered = (e: number) => (e > 0 ? e + symbolGap : 0);
     const px = (box[0] + box[2]) / 2;
     const py = side < 0 ? box[3] : box[1];
+    // An anchor in the row itself: across to the nearer end of the label, or none over it.
+    if (side < 0 ? l.y < py : l.y > py) {
+      if (l.x >= box[0] && l.x <= box[2]) return null;
+      const end = l.x < box[0] ? box[0] : box[2];
+      const dir = Math.sign(end - l.x);
+      return [[l.x + dir * buffered(symbolExtent(l.symbol, dir, 0, [l.x, l.y])), l.y], [end, l.y]];
+    }
     const dx = px - l.x;
     // Towards the label, the column may meet the symbol straight away.
     const e = buffered(symbolExtent(l.symbol, 0, side, [l.x, l.y]));
-    if (Math.abs(dx) < e) return [[px, l.y + side * Math.sqrt(e * e - dx * dx)], [px, py]];
+    if (Math.abs(dx) < e) {
+      const from = l.y + side * Math.sqrt(e * e - dx * dx);
+      // The symbol reaches the label: nothing to join.
+      return side * (py - from) > 0 ? [[px, from], [px, py]] : null;
+    }
     if (Math.abs(py - l.y) < 1e-9) return [[l.x + Math.sign(dx) * buffered(symbolExtent(l.symbol, Math.sign(dx), 0, [l.x, l.y])), l.y], [px, py]];
     const start: Point = [l.x + Math.sign(dx) * buffered(symbolExtent(l.symbol, Math.sign(dx), 0, [l.x, l.y])), l.y];
     return [start, [px, l.y], [px, py]];
@@ -551,10 +562,20 @@ export class Placer {
     const buffered = (e: number) => (e > 0 ? e + symbolGap : 0);
     const py = (box[1] + box[3]) / 2;
     const px = side < 0 ? box[2] : box[0];
+    // An anchor in the column itself: up or down to the nearer edge of the label, or none over it.
+    if (side < 0 ? l.x < px : l.x > px) {
+      if (l.y >= box[1] && l.y <= box[3]) return null;
+      const edge = l.y < box[1] ? box[1] : box[3];
+      const dir = Math.sign(edge - l.y);
+      return [[l.x, l.y + dir * buffered(symbolExtent(l.symbol, 0, dir, [l.x, l.y]))], [l.x, edge]];
+    }
     const dy = py - l.y;
     // Towards the label, the row may meet the symbol straight away.
     const e = buffered(symbolExtent(l.symbol, side, 0, [l.x, l.y]));
-    if (Math.abs(dy) < e) return [[l.x + side * Math.sqrt(e * e - dy * dy), py], [px, py]];
+    if (Math.abs(dy) < e) {
+      const from = l.x + side * Math.sqrt(e * e - dy * dy);
+      return side * (px - from) > 0 ? [[from, py], [px, py]] : null;
+    }
     if (Math.abs(px - l.x) < 1e-9) return [[l.x, l.y + Math.sign(dy) * buffered(symbolExtent(l.symbol, 0, Math.sign(dy), [l.x, l.y]))], [px, py]];
     const start: Point = [l.x, l.y + Math.sign(dy) * buffered(symbolExtent(l.symbol, 0, Math.sign(dy), [l.x, l.y]))];
     return [start, [l.x, py], [px, py]];
@@ -675,7 +696,8 @@ export class Placer {
     }
     for (const i of this.order) {
       const list = this.feasible[i];
-      if (this.fixed(i) || this.current[i] || this.isGroup(i)) continue;
+      // A symbol alone has nothing to show, required or not.
+      if (this.fixed(i) || this.current[i] || this.isGroup(i) || !(this.labels[i].width > 0 && this.labels[i].height > 0)) continue;
       let chosen: Candidate | null = null;
       const key = previous?.[i];
       if (key) {
@@ -1078,7 +1100,13 @@ export class Placer {
       for (const c of this.feasible[p]) {
         const blockers = this.conflicts(p, c, (best?.blockers.length ?? GROUP_MAX_EJECT) + 1);
         if (blockers.length > (best ? best.blockers.length - 1 : GROUP_MAX_EJECT)) continue;
-        if (blockers.some((b) => !this.isMovable(b) || this.priority(b) >= this.priority(p) || (this.current[b]!.placement === 'center' && this.labels[b].symbol?.type === 'polygon'))) continue;
+        // A required label pushed aside might find no room again: a block never pushes one.
+        if (
+          blockers.some(
+            (b) => !this.isMovable(b) || this.mode(b) === 'required' || this.priority(b) >= this.priority(p) || (this.current[b]!.placement === 'center' && this.labels[b].symbol?.type === 'polygon')
+          )
+        )
+          continue;
         best = { c, blockers };
         if (!blockers.length) break;
       }

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Property tests: on 60 random scenes mixing every feature, the counts and flags agree, nothing shown and not flagged overlaps, crowds the spacing, crosses a leader, leaves the bounds or lies on a hard obstacle, required and pinned labels are shown, and the result is the same twice, and again with itself as `previous`
+
+### Fixed
+
+- A required symbol without a label (no size) no longer gets an empty box and a leader to nothing
+- A group's block no longer pushes aside a required label, which could then find no room
+- Callouts whose anchor lies in their own column or row, or whose symbol reaches the label: a straight leader, or none, instead of one leaving the bounds
+
 ## [0.2.0] - 2026-10-30
 
 ### Added
