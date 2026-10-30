@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `dodge: 'left' | 'right'`: names at the ends of the lines of a chart, set beside their anchor and moved only up or down to clear each other, in stacks aligned on their anchors, with straight leaders when an anchor no longer faces its label; `placement: 'dodge'`
+- `placeText({ dodge })`: every label of a Plot text mark dodged, into the side margins
+- Demo: a line chart in `docs/exemple-plot.html`, the life expectancy of fourteen countries named at the ends of their lines, against Plot alone
+
+### Fixed
+
+- Columns, callouts and rows against an edge of the bounds: only the labels in the way move away from it, no longer the whole stack
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

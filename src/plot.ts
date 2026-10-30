@@ -86,6 +86,11 @@ export interface PlotPlacementOptions extends Omit<PlaceOptions, 'bounds' | 'obs
   lineHeight?: number;
   /** Every label `required`, for a blank base map. A `mode` channel wins. */
   required?: boolean;
+  /**
+   * Every label dodged to this side of its anchor, moved only up or down: the names at the ends
+   * of the lines of a chart, with `Plot.selectLast`. They may go into the side margins of the plot.
+   */
+  dodge?: 'left' | 'right';
   /** Leaders: stroke and width. Default `currentColor`, 0.5. */
   leaderStroke?: string;
   leaderWidth?: number;
@@ -104,7 +109,7 @@ const LAND_COST = 2.5;
 
 /** A `render` function for `Plot.text` that places the labels instead of writing them at their anchors. */
 export function placeText(options: PlotPlacementOptions = {}): Render {
-  const { land, landCost = LAND_COST, obstacles, r: radius = 0, lineHeight = 1.2, required, leaderStroke = 'currentColor', leaderWidth = 0.5, onPlace, debug, ...place } = options;
+  const { land, landCost = LAND_COST, obstacles, r: radius = 0, lineHeight = 1.2, required, dodge, leaderStroke = 'currentColor', leaderWidth = 0.5, onPlace, debug, ...place } = options;
   return (index, scales, values, dimensions, context, next) => {
     const g = next(index, scales, values, dimensions, context);
     const texts = g ? [...g.children].filter((e): e is SVGTextElement => e.tagName === 'text') : [];
@@ -130,7 +135,8 @@ export function placeText(options: PlotPlacementOptions = {}): Render {
         height: fontSize * lineHeight,
         symbol: r > 0 ? { type: 'circle', radius: r } : undefined,
         priority: values.priority ? values.priority[i] : values.r ? values.r[i] : 0,
-        mode: values.mode ? values.mode[i] : required ? 'required' : undefined
+        mode: values.mode ? values.mode[i] : required ? 'required' : undefined,
+        dodge
       };
     });
 
@@ -141,7 +147,9 @@ export function placeText(options: PlotPlacementOptions = {}): Render {
       if (rings.length) all.push({ type: 'polygon', rings, soft: true, cost: landCost }, ...rings.map((ring): Obstacle => ({ type: 'line', points: [...ring, ring[0]], soft: true })));
     }
     const { width, height, marginTop, marginRight, marginBottom, marginLeft } = dimensions;
-    const result = placeLabels(labels, { ...place, bounds: [marginLeft, marginTop, width - marginRight, height - marginBottom], obstacles: all });
+    // Names at the ends of lines go into the side margins, which Plot leaves for them.
+    const bounds: [number, number, number, number] = dodge ? [0, marginTop, width, height - marginBottom] : [marginLeft, marginTop, width - marginRight, height - marginBottom];
+    const result = placeLabels(labels, { ...place, bounds, obstacles: all });
     onPlace?.(result);
 
     const out = doc.createElementNS(SVG, 'g');

@@ -73,6 +73,16 @@ describe('placeText', () => {
     expect(debug.children[2].children).toHaveLength(1);
   });
 
+  it('dodges the names at the ends of lines, right of their anchors', () => {
+    let result: PlacementResult | undefined;
+    const out = render(['Alpha', 'Beta'], [300, 300], [100, 102], { dodge: 'right', onPlace: (r) => (result = r) });
+    expect(result!.labels.map((l) => l.placement)).toEqual(['dodge', 'dodge']);
+    const [first, second] = result!.labels;
+    expect(first.y).toBeLessThan(second.y);
+    expect(first.box![3]).toBeLessThanOrEqual(second.box![1]);
+    expect(out.children[0].children).toHaveLength(2);
+  });
+
   it('tells a label blocked by an obstacle from one crowded out', () => {
     let result: PlacementResult | undefined;
     render(['Alpha'], [100], [100], { positions: ['right'], leader: false, obstacles: [{ type: 'rect', box: [90, 80, 200, 120] }], onPlace: (r) => (result = r) });

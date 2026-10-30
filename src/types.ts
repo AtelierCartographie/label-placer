@@ -15,9 +15,10 @@ export type Position =
 
 /**
  * Where a label ended up: around the anchor, inside its symbol, centered on an area, pinned,
- * in a `column` beside its cluster (`align: 'columns'`), or in the `margin` (a callout).
+ * in a `column` beside its cluster (`align: 'columns'`), in the `margin` (a callout), or
+ * beside its anchor, moved up or down to clear the others (`dodge`).
  */
-export type Placement = Position | 'inside' | 'center' | 'pinned' | 'column' | 'margin';
+export type Placement = Position | 'inside' | 'center' | 'pinned' | 'column' | 'margin' | 'dodge';
 
 /** The mark drawn at the anchor. Candidates are laid out around it and leaders start on its edge. */
 export type LabelSymbol =
@@ -68,6 +69,13 @@ export interface LabelInput {
    * and never moved, like a pinned label.
    */
   callout?: boolean | 'left' | 'right' | 'top' | 'bottom';
+  /**
+   * Set right (or left) of its anchor and moved only up or down, to clear the other labels
+   * dodged to the same side: the names at the ends of the lines of a chart. With a straight
+   * leader when the anchor no longer faces its label. Placed first and never moved, like a
+   * callout; optional ones of lower priority are hidden when there is no room for them all.
+   */
+  dodge?: 'left' | 'right';
 }
 
 /**

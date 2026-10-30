@@ -5,7 +5,7 @@ Automatic label placement for **maps** and **charts**, independent of the render
 - Ordered candidate positions around point symbols (by default the sides first, right, above, left, below, then the corners), inside a symbol when the label fits, centered on areas.
 - Polygons: a label goes wholly inside its polygon, or wholly outside, never across its outline.
 - Several layouts per label (one line, two lines...): the engine picks the one that fits.
-- Aligned labels: dense clusters in columns beside them or in rows above or below them, callouts along the edges of the map.
+- Aligned labels: dense clusters in columns beside them or in rows above or below them, callouts along the edges of the map, names at the ends of the lines of a chart.
 - No ambiguity: a label avoids spots as close to another symbol as to its own.
 - Priorities and a hierarchy of modes: `pinned` (placed by hand), `required` (never hidden), `optional`.
 - Obstacles: other symbols, legend, title, any rectangle or circle, lines such as coastlines, filled polygons such as the land or a mask, with hard and soft costs.
@@ -122,6 +122,10 @@ A group label is a last resort, close to a photo caption that lists the people i
 
 `callout: true` (or `'left'`, `'right'`) sets a label in a column along the left or right edge of the bounds, the nearer one by default: boundary labeling, for a few chosen labels, often on several lines (give their measured size). Callouts are stacked in the order of their anchors, as close to their height as the others allow, and joined to their symbol by an orthogonal leader, horizontal from the label then vertical. `callout: 'top'` or `'bottom'` sets it in a row along that edge instead, centered as near over its anchor as the others allow (`textAnchor` `middle`), the leader vertical from the label then horizontal. Neighbours whose leaders would cross are swapped. They are placed first and never moved, like pinned labels, and the others avoid them. `placement` is `margin`.
 
+### Line ends
+
+`dodge: 'right'` (or `'left'`) sets a label beside its anchor, flushed towards it, and moves it only up or down, to clear the other labels dodged to the same side: the names at the ends of the lines of a chart, with no legend. The labels whose boxes share some width are stacked in the order of their anchors, each as close to the height of its anchor as the others allow, a `gap` apart, within the bounds. When an anchor no longer faces its label (moved by more than half its height), the whole stack moves one label height away, aligned, and the moved labels get a straight leader from their anchor. A stack too tall for the bounds sheds its optional labels, lowest priority first (`blocked` stays false: they were crowded out). Dodged labels are placed first and never moved, like callouts, and the others avoid them; they do not avoid the static obstacles. Give bounds that hold them: the right margin of a chart. `placement` is `dodge`.
+
 ### Line obstacles
 
 `{ type: 'line', points, soft? }` (coastline, border, river) keeps label boxes off a line; leaders may cross it. A soft line costs `symbolObstacles.softCost` per label height of line under the box.
@@ -230,7 +234,7 @@ Plot.plot({
 });
 ```
 
-Its options are those of `placeLabels` in pixels, without `bounds` (the plot's frame), plus `land` (GeoJSON, projected: names prefer the sea), `obstacles` (in pixels, or a function of `project(lon, lat)`), `r` (the radius without an `r` channel, 3 for Plot's default dots), `required`, `lineHeight`, `onPlace(result)` (keep it as the next `previous`) and `debug`: overlapping labels in red, a red cross at the anchor of a `blocked` label, a red ring where other labels took the room. Single-line texts only. `docs/exemple-plot.html` runs it on a map of Europe and on a scatterplot (Gapminder), each against Plot alone, at the width of the page.
+Its options are those of `placeLabels` in pixels, without `bounds` (the plot's frame), plus `land` (GeoJSON, projected: names prefer the sea), `obstacles` (in pixels, or a function of `project(lon, lat)`), `r` (the radius without an `r` channel, 3 for Plot's default dots), `required`, `dodge` (every label dodged to that side, for `Plot.selectLast` on a line chart, with the side margins in the bounds), `lineHeight`, `onPlace(result)` (keep it as the next `previous`) and `debug`: overlapping labels in red, a red cross at the anchor of a `blocked` label, a red ring where other labels took the room. Single-line texts only. `docs/exemple-plot.html` runs it on a map of Europe, on a scatterplot (Gapminder) and on a line chart named at the ends of its lines, each against Plot alone, at the width of the page.
 
 **Mapshaper**: `labels()`, from `@ateliercartographie/label-placer/mapshaper`, is a function for `-run`. It places the labels of the target layer, points or polygons, and returns the commands that draw them in the SVG output.
 
@@ -261,7 +265,7 @@ The labels are placed on the SVG page: `width` and `margin` (pixels) fit `bbox` 
 
 ### `placeLabels(labels, options): PlacementResult`
 
-`LabelInput`: `id?`, `x`, `y`, `width`, `height` (both 0 for a symbol without a label), `layouts?` (`[{ width, height, cost? }]`), `symbol?` (`{ type: 'circle', radius }`, `{ type: 'rect', width, height }`, `{ type: 'area', inscribedRadius }` or `{ type: 'polygon', rings }`), `priority?`, `mode?`, `offset?` (pinned), `leader?` (default true), `callout?` (`true`, `'left'`, `'right'`, `'top'` or `'bottom'`).
+`LabelInput`: `id?`, `x`, `y`, `width`, `height` (both 0 for a symbol without a label), `layouts?` (`[{ width, height, cost? }]`), `symbol?` (`{ type: 'circle', radius }`, `{ type: 'rect', width, height }`, `{ type: 'area', inscribedRadius }` or `{ type: 'polygon', rings }`), `priority?`, `mode?`, `offset?` (pinned), `leader?` (default true), `callout?` (`true`, `'left'`, `'right'`, `'top'` or `'bottom'`), `dodge?` (`'left'` or `'right'`).
 
 `PlaceOptions`:
 
@@ -349,10 +353,30 @@ The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `doc
 
 ## Roadmap
 
+**Placement**
+
 - An exact boundary labeling (minimal total leader length without crossings).
 - Columns on a world map: Central and Eastern Europe still lack room (Russia, Ukraine and Turkey fill the east); leaders routed around labels rather than taking them along.
+- Legend and title: the emptiest spot for a block of a given size, found on the same obstacle rasters, before the names.
+- Consistent across zoom levels: a label shown at one zoom stays shown, in the same place if it can, at the next one.
+
+**Adapters and rendering**
+
+- An Illustrator script: names placed on the point layers of an `.ai` document, like the Mapshaper adapter.
+- MapLibre or Leaflet: labels placed once per zoom level, instead of the built-in collision detection, served as a GeoJSON source.
+- A demo page rendering the same placement with SVG, Canvas and deck.gl.
+- Animated transitions: before and after pairs telling the labels that enter, leave or move, for a chart by year.
+- An optional `measure()` helper (Canvas, OffscreenCanvas), from the Helvetica and Arial metrics of the Mapshaper adapter.
+
+**API and performance**
+
+- Why a label is hidden: a reason for each one (bounds, static obstacle, crowded out by such label, budget spent), and a debug view outside Plot.
 - Columnar input and output (typed arrays) for Web Workers.
 - A stateful placer for editors: `pin`, `unpin`, incremental updates.
-- A demo page rendering the same placement with SVG, Canvas and deck.gl.
+
+**Quality**
+
+- Property tests: on random scenes, no overlap outside forced required labels, no label on a hard obstacle, the same result twice.
+- Visual regression tests of the demo figures, to see every placement a tuned heuristic changes.
 
 Out of scope: labels along lines and curved labels; breaking and measuring text, left to the caller (see Layouts).

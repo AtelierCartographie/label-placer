@@ -70,7 +70,7 @@ function median(values: number[]): number {
   return sorted[sorted.length >> 1] || 1;
 }
 
-const STACKED = new Set(['column', 'margin']);
+const STACKED = new Set(['column', 'margin', 'dodge']);
 
 /**
  * Whether two candidates clash: boxes, or a leader and a box, closer than `spacing` (except two
@@ -108,16 +108,20 @@ function polylineLength(line: Point[] | null): number {
 /**
  * Centers of boxes of the given sizes along one axis, in this order, each as close to its
  * target as the others allow (isotonic regression, pool adjacent violators), `gap` apart, and
- * shifted to stay within the span when they can.
+ * within the span when they fit: only the boxes in the way of an edge move away from it.
  */
 function spread(targets: number[], sizes: number[], gap: number, [lo, hi]: [number, number]): number[] {
   const n = targets.length;
-  // Offsets that keep the boxes apart, then pool adjacent violators on the shifted targets.
+  // Offsets that keep the boxes apart, then pool adjacent violators on the shifted targets,
+  // clamped to where the whole stack stays within the span.
   const offset = new Array<number>(n).fill(0);
   for (let k = 1; k < n; k++) offset[k] = offset[k - 1] + (sizes[k - 1] + sizes[k]) / 2 + gap;
+  const min = lo + sizes[0] / 2;
+  const max = hi - offset[n - 1] - sizes[n - 1] / 2;
   const blocks: { sum: number; count: number }[] = [];
   for (let k = 0; k < n; k++) {
-    blocks.push({ sum: targets[k] - offset[k], count: 1 });
+    const t = targets[k] - offset[k];
+    blocks.push({ sum: min <= max ? Math.min(max, Math.max(min, t)) : t, count: 1 });
     while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].count > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].count) {
       const b = blocks.pop()!;
       blocks[blocks.length - 1].sum += b.sum;
@@ -190,9 +194,9 @@ export class Placer {
   constructor(input: LabelInput[], options: PlaceOptions) {
     this.count = input.length;
     this.groupInputs = options.groups ?? [];
-    // Members that may be named by a block: labels with a size, neither pinned nor callouts.
+    // Members that may be named by a block: labels with a size, neither pinned, callouts nor dodged.
     this.groupMembers = this.groupInputs.map((g) => [
-      ...new Set(g.members.filter((m) => Number.isInteger(m) && m >= 0 && m < input.length && input[m].width > 0 && input[m].height > 0 && input[m].mode !== 'pinned' && !input[m].callout))
+      ...new Set(g.members.filter((m) => Number.isInteger(m) && m >= 0 && m < input.length && input[m].width > 0 && input[m].height > 0 && input[m].mode !== 'pinned' && !input[m].callout && !input[m].dodge))
     ]);
     const labels = (this.labels = this.groupInputs.length ? [...input, ...this.groupInputs.map((g, k) => groupLabel(input, g, this.groupMembers[k]))] : input);
     this.absorbed = new Int32Array(this.count).fill(-1);
@@ -270,8 +274,8 @@ export class Placer {
         this.blocked.push([]);
         continue;
       }
-      if (l.callout) {
-        // Set once every callout is known, below.
+      if (l.callout || l.dodge) {
+        // Set once every callout, or every dodged label, is known, below.
         this.feasible.push([]);
         this.farther.push([]);
         this.blocked.push([]);
@@ -304,8 +308,9 @@ export class Placer {
     }
 
     this.placeCallouts();
+    this.placeDodged(leader !== null);
 
-    const modeRank = (i: number) => (this.isGroup(i) ? 3 : labels[i].callout ? 0 : MODE_RANK[labels[i].mode ?? 'optional']);
+    const modeRank = (i: number) => (this.isGroup(i) ? 3 : labels[i].callout || labels[i].dodge ? 0 : MODE_RANK[labels[i].mode ?? 'optional']);
     this.order = labels
       .map((_, i) => i)
       .sort(
@@ -391,6 +396,65 @@ export class Placer {
         (o) => this.stackRow(o, side, row, s.gap, [bx0, bx1], (i, box) => this.rowCalloutLeader(i, box, side))
       );
       order.forEach((i, k) => (this.feasible[i] = [cands[k]]));
+    }
+  }
+
+  /**
+   * Dodged labels are set beside their anchor, those whose boxes share some width in one stack,
+   * each as close to the height of its anchor as the others allow. A stack too tall for the
+   * bounds sheds its optional labels, lowest priority first. When an anchor no longer faces its
+   * label, the whole stack moves one label height away, to leave room for straight leaders.
+   */
+  private placeDodged(leaders: boolean): void {
+    const s = this.settings;
+    const [, by0, , by1] = this.bounds;
+    const dodged = this.labels.map((_, i) => i).filter((i) => this.labels[i].dodge && this.labels[i].width > 0 && this.labels[i].height > 0);
+    for (const side of [-1, 1] as const) {
+      const near = (i: number) => {
+        const l = this.labels[i];
+        return l.x + side * (symbolExtent(l.symbol, side, 0, [l.x, l.y]) + s.gap);
+      };
+      const span = (i: number): [number, number] => (side > 0 ? [near(i), near(i) + this.labels[i].width] : [near(i) - this.labels[i].width, near(i)]);
+      const group = dodged.filter((i) => this.labels[i].dodge === (side < 0 ? 'left' : 'right')).sort((a, b) => span(a)[0] - span(b)[0] || a - b);
+      // Stacks: labels whose spans overlap, through others.
+      const stacks: number[][] = [];
+      let end = -Infinity;
+      for (const i of group) {
+        if (span(i)[0] < end) stacks[stacks.length - 1].push(i);
+        else stacks.push([i]);
+        end = Math.max(end, span(i)[1]);
+      }
+      for (const stack of stacks) {
+        const order = stack.sort((a, b) => this.labels[a].y - this.labels[b].y || a - b);
+        const height = () => order.reduce((sum, i) => sum + this.labels[i].height, 0) + s.gap * (order.length - 1);
+        while (height() > by1 - by0) {
+          const optional = order.filter((i) => this.mode(i) === 'optional');
+          if (!optional.length) break;
+          const drop = optional.reduce((a, b) => (this.priority(b) < this.priority(a) || (this.priority(b) === this.priority(a) && b > a) ? b : a));
+          order.splice(order.indexOf(drop), 1);
+        }
+        this.work += order.length;
+        const ys = spread(
+          order.map((i) => this.labels[i].y),
+          order.map((i) => this.labels[i].height),
+          s.gap,
+          [by0, by1]
+        );
+        const led = (k: number) => leaders && this.labels[order[k]].leader !== false && Math.abs(ys[k] - this.labels[order[k]].y) > this.labels[order[k]].height / 2;
+        const room = order.some((_, k) => led(k)) ? this.unit : 0;
+        order.forEach((i, k) => {
+          const l = this.labels[i];
+          const [x0, x1] = span(i);
+          const box: Box = [x0 + side * room, ys[k] - l.height / 2, x1 + side * room, ys[k] + l.height / 2];
+          const lead: Point[] | null = led(k)
+            ? [
+                [l.x + side * (symbolExtent(l.symbol, side, 0, [l.x, l.y]) + s.symbolGap), l.y],
+                [side > 0 ? box[0] : box[2], ys[k]]
+              ]
+            : null;
+          this.feasible[i] = [makeCandidate(box, 0, 'dodge', lead ? 1 : 0, side > 0 ? 'start' : 'end', 'middle', lead)];
+        });
+      }
     }
   }
 
@@ -538,9 +602,9 @@ export class Placer {
     return this.labels[i].priority ?? 0;
   }
 
-  /** Pinned labels and callouts: placed first, where they were put, never moved. */
+  /** Pinned labels, callouts and dodged labels: placed first, where they were put, never moved. */
   private fixed(i: number): boolean {
-    return this.mode(i) === 'pinned' || !!this.labels[i].callout;
+    return this.mode(i) === 'pinned' || !!this.labels[i].callout || !!this.labels[i].dodge;
   }
 
   private mode(i: number): LabelMode {
@@ -990,7 +1054,7 @@ export class Placer {
   /** Whether a placed label may be taken into a column: one that could move there itself. */
   private joins(i: number): boolean {
     const c = this.current[i];
-    return !!c && !this.isGroup(i) && this.isMovable(i) && this.labels[i].leader !== false && !['inside', 'center', 'column', 'margin'].includes(c.placement);
+    return !!c && !this.isGroup(i) && this.isMovable(i) && this.labels[i].leader !== false && !['inside', 'center', 'column', 'margin', 'dodge'].includes(c.placement);
   }
 
   /**
@@ -1102,7 +1166,8 @@ export class Placer {
           box: null,
           leader: null,
           overlapping: false,
-          blocked: l.width > 0 && l.height > 0 && this.absorbed[i] < 0 && !this.feasible[i].length && !this.farther[i].length,
+          // A dodged label is hidden only for want of room in its stack.
+          blocked: l.width > 0 && l.height > 0 && !l.dodge && this.absorbed[i] < 0 && !this.feasible[i].length && !this.farther[i].length,
           group: this.absorbed[i] >= 0 ? this.absorbed[i] : null
         };
       const [x, y] = this.textPoint(c);

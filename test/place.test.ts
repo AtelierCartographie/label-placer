@@ -514,6 +514,64 @@ describe('placeLabels', () => {
       }
   });
 
+  it('dodges the names at the ends of lines up or down, with leaders once they no longer face them', () => {
+    // Line ends at x = 300: two far apart, three too close for 10 px labels.
+    const ends: LabelInput[] = [
+      { id: 'a', x: 300, y: 40, width: 50, height: 10, dodge: 'right' },
+      { id: 'b', x: 300, y: 150, width: 60, height: 10, dodge: 'right' },
+      { id: 'c', x: 300, y: 153, width: 40, height: 10, dodge: 'right' },
+      { id: 'd', x: 300, y: 156, width: 40, height: 10, dodge: 'right' },
+      { id: 'e', x: 300, y: 250, width: 40, height: 10, dodge: 'right' }
+    ];
+    const alone = placeLabels([ends[0], ends[4]], { bounds: [0, 0, 400, 300] });
+    // Clear of the others: right of its anchor, at its height, flushed left, no leader.
+    for (const l of alone.labels) {
+      expect(l.placement).toBe('dodge');
+      expect(l.textAnchor).toBe('start');
+      expect(l.leader).toBeNull();
+      expect(l.y).toBe(ends[l.id === 'a' ? 0 : 4].y);
+      expect(l.box![0]).toBe(302);
+    }
+    const r = placeLabels(ends, { bounds: [0, 0, 400, 300] });
+    expect(r.stats.placed).toBe(5);
+    const [, b, c, d] = r.labels;
+    // In the order of their anchors, the middle one at its height, stacked a gap apart.
+    expect(c.y).toBeCloseTo(153);
+    expect(b.box![3] + 2).toBeCloseTo(c.box![1]);
+    expect(c.box![3] + 2).toBeCloseTo(d.box![1]);
+    // The stack moved one label height away, for leaders from the line ends to the moved labels.
+    expect(c.box![0]).toBe(312);
+    expect(c.leader).toBeNull();
+    expect(b.leader).toEqual([[302.5, 150], [312, b.y]]);
+    // The whole stack stays aligned; a label still facing its line end has no leader.
+    expect(r.labels[0].y).toBe(40);
+    expect(r.labels[0].box![0]).toBe(312);
+    expect(r.labels[0].leader).toBeNull();
+    // Labels that share no width make stacks of their own.
+    const apart = placeLabels([ends[1], { ...ends[2], x: 100 }], { bounds: [0, 0, 400, 300] });
+    expect(apart.labels.map((l) => l.y)).toEqual([150, 153]);
+
+    // Against the top edge, only the labels in the way move down: one far below keeps its height.
+    const edge = placeLabels(
+      [{ ...ends[0], y: 3 }, { ...ends[1], y: 4 }, ends[4]],
+      { bounds: [0, 0, 400, 300] }
+    );
+    expect(edge.labels.map((l) => l.y)).toEqual([5, 17, 250]);
+
+    // No room for them all: the optional labels of lowest priority go first.
+    const tight = placeLabels(
+      ends.slice(1, 4).map((l, k) => ({ ...l, y: 15, priority: k })),
+      { bounds: [0, 0, 400, 25] }
+    );
+    expect(tight.labels.map((l) => l.visible)).toEqual([false, true, true]);
+    expect(tight.labels[0].blocked).toBe(false);
+
+    // Dodged to the left: flushed right, left of the anchor.
+    const left = placeLabels([{ ...ends[0], x: 100, dodge: 'left' }], { bounds: [0, 0, 400, 300] });
+    expect(left.labels[0].textAnchor).toBe('end');
+    expect(left.labels[0].box![2]).toBe(98);
+  });
+
   it('keeps clear space between labels, thinning the dense areas first', () => {
     const spaced = placeLabels(labels, { ...options, spacing: 6 });
     const gap = (a: Box, b: Box) => Math.max(a[0] - b[2], b[0] - a[2], a[1] - b[3], b[1] - a[3]);
