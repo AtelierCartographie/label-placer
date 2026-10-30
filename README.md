@@ -362,7 +362,6 @@ The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `doc
 
 **Adapters and rendering**
 
-- An Illustrator script: names placed on the point layers of an `.ai` document, like the Mapshaper adapter.
 - MapLibre or Leaflet: labels placed once per zoom level, instead of the built-in collision detection, served as a GeoJSON source.
 - A demo page rendering the same placement with SVG, Canvas and deck.gl.
 - Animated transitions: before and after pairs telling the labels that enter, leave or move, for a chart by year.
@@ -380,3 +379,5 @@ The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `doc
 - Visual regression tests of the demo figures, to see every placement a tuned heuristic changes.
 
 Out of scope: labels along lines and curved labels; breaking and measuring text, left to the caller (see Layouts).
+
+Set aside: an Illustrator script, placing the texts of an `.ai` document. label-placer works upstream, in the tools that make the map (Khartis, Mapshaper, Observable Plot, an R package), where each name still knows its feature: its point, its centroid, its polygon. In an Illustrator document that link is gone. A map made by such a tool is better placed there, before the export. Names set by hand belong to no symbol the script could find for sure, or to none at all (a sea, a region), and the names of polygons have no point to look for. The script would have to guess which text names which feature, which is the link the engine needs most.
