@@ -16,21 +16,32 @@
       "types": "./dist/src/plot.d.ts",
       "import": "./dist/plot.js",
       "require": "./dist/plot.cjs"
+    },
+    "./mapshaper": {
+      "types": "./dist/src/mapshaper.d.ts",
+      "import": "./dist/mapshaper.js",
+      "require": "./dist/mapshaper.cjs"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "dev": "vite serve demo",
+    "dev": "vite serve docs",
     "build": "tsc --noEmit && vite build && tsc --declaration --emitDeclarationOnly && node scripts/fix-dts-extensions.mjs",
+    "build:docs": "node scripts/build-docs.ts",
     "test": "vitest run",
     "bench": "node bench/run.ts",
     "release:patch": "npm version patch && git push && git push --tags",
     "release:minor": "npm version minor && git push && git push --tags",
     "release:major": "npm version major && git push && git push --tags",
-    "prepare": "vite build && tsc --declaration --emitDeclarationOnly && node scripts/fix-dts-extensions.mjs"
+    "prepare": "vite build && tsc --declaration --emitDeclarationOnly && node scripts/fix-dts-extensions.mjs",
+    "prepublishOnly": "vitest run"
   },
   "keywords": [
     "label",
@@ -41,16 +52,22 @@
     "collision",
     "cartography",
     "map",
-    "dataviz"
+    "dataviz",
+    "observable-plot",
+    "mapshaper"
   ],
   "author": "Atelier de cartographie de Sciences Po",
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AtelierCartographie/label-placer"
+    "url": "git+https://github.com/AtelierCartographie/label-placer.git"
+  },
+  "homepage": "https://github.com/AtelierCartographie/label-placer#readme",
+  "bugs": {
+    "url": "https://github.com/AtelierCartographie/label-placer/issues"
   },
   "engines": {
-    "node": ">=22.18"
+    "node": ">=18"
   },
   "packageManager": "pnpm@10.17.1",
   "devDependencies": {

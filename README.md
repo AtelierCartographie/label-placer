@@ -18,7 +18,15 @@ Zero dependencies. Works in any unit (pixels, points, millimetres) and in a Web 
 **Created by:** [Thomas Ansart — Atelier de cartographie de Sciences Po](https://www.sciencespo.fr/cartographie/)
 **License:** ISC
 
-> Status: early development, not yet published to npm. The API may still change.
+> Status: early development (0.x). The API may still change between minor versions; see the [changelog](CHANGELOG.md).
+
+## Install
+
+```sh
+npm install @ateliercartographie/label-placer
+```
+
+ES module and CommonJS builds with their TypeScript types. Two adapters come with it (see Rendering): `@ateliercartographie/label-placer/plot` for Observable Plot, `@ateliercartographie/label-placer/mapshaper` for Mapshaper.
 
 ## Quick start
 
@@ -154,7 +162,7 @@ The same engine serves maps with opposite aims; the options set the aim.
 
 **A blank base map with every name** (France by départements, Europe by countries): all labels `required`, nothing hidden. Offer the layouts a cartographer would use when a name does not fit: two lines, then an abbreviation or a number at a cost above the spots next to the feature and below any leader (8, plus its rank and length): `cost: 10` sets a number only where a leader looms, as in an atlas. On the 96 départements of an A4 page at 10 px, 27 leaders give way to 21 numbers and 6 leaders. A `required` label with no free spot left, even after the ejection chains, tries leader rings farther out (up to 11 label heights beyond the last one, out of the other areas, so at sea) before it overlaps. `result.stats.overlapping` tells whether the page is too small for the text size. On the 50 countries of Europe (Natural Earth 1:110m, A4 page), names alone leave 1 to 4 overlaps from 8 to 12 px, all in the Balkans; with ISO codes as a last layout at cost 10, none from 8 to 10 px: a dozen codes, from Belgium to the Caucasus, for a key beside the map.
 
-**A map made in code** (Observable Plot, R, Mapshaper, a script): the result is read, adjusted and run again. `placeLabels` is deterministic under its work budget, so a change in the data or the options is the only change in the result. Pin what you settled with `mode: 'pinned'` and `offset` (taken from a previous result), pass `previous` to keep the rest where it was, and read the result to find the labels left to look at: `overlapping`, `ring > 0`, and the hidden ones, `blocked` when every spot falls on a static obstacle or out of bounds (look at the obstacles, the bounds or the size), crowded out by other labels otherwise (look at the priorities, the spacing, the text size). With Observable Plot, `placeText` does all this in a text mark (see Rendering), and `debug: true` marks these labels on the map.
+**A map made in code** (Observable Plot, R, Mapshaper, a script): the result is read, adjusted and run again. `placeLabels` is deterministic under its work budget, so a change in the data or the options is the only change in the result. Pin what you settled with `mode: 'pinned'` and `offset` (taken from a previous result), pass `previous` to keep the rest where it was, and read the result to find the labels left to look at: `overlapping`, `ring > 0`, and the hidden ones, `blocked` when every spot falls on a static obstacle or out of bounds (look at the obstacles, the bounds or the size), crowded out by other labels otherwise (look at the priorities, the spacing, the text size). With Observable Plot, `placeText` does all this in a text mark (see Rendering), and `debug: true` marks these labels on the map. With Mapshaper, `labels` writes `lp_visible`, `lp_blocked` and `lp_overlapping` back to the layer, for `-filter`, `-info` or a CSV.
 
 ## Rendering
 
@@ -223,6 +231,29 @@ Plot.plot({
 ```
 
 Its options are those of `placeLabels` in pixels, without `bounds` (the plot's frame), plus `land` (GeoJSON, projected: names prefer the sea), `obstacles` (in pixels, or a function of `project(lon, lat)`), `r` (the radius without an `r` channel, 3 for Plot's default dots), `required`, `lineHeight`, `onPlace(result)` (keep it as the next `previous`) and `debug`: overlapping labels in red, a red cross at the anchor of a `blocked` label, a red ring where other labels took the room. Single-line texts only. `docs/exemple-plot.html` runs it on a map of Europe and on a scatterplot (Gapminder), each against Plot alone, at the width of the page.
+
+**Mapshaper**: `labels()`, from `@ateliercartographie/label-placer/mapshaper`, is a function for `-run`. It places the labels of the target layer, points or polygons, and returns the commands that draw them in the SVG output.
+
+```sh
+npm install mapshaper @ateliercartographie/label-placer
+
+mapshaper -i land.json name=land -style fill='#eef2f5' \
+  -i communes.json name=communes -style r='Math.sqrt(births) / 2.5' fill='#e09b35' \
+  -require @ateliercartographie/label-placer/mapshaper alias=lp \
+  -run target=communes,land '{lp.labels(targets.communes, io, { text: "nom", width: 900, fontSize: 9, bbox: targets.land.bbox, land: targets.land.geojson, spacing: 4, leaders: 0.25, labelStyle: "halo-width=2 halo-color=white" })}' \
+  -o map.svg target=*
+```
+
+A blank base map of polygons, every name inside its outline or outside it, on two lines or by its code if need be:
+
+```sh
+mapshaper departements.json -style fill='#eef2f5' stroke='#9aa7b2' \
+  -require @ateliercartographie/label-placer/mapshaper alias=lp \
+  -run '{lp.labels(target, io, { text: "nom", width: 900, fontSize: 9, required: true, twoLines: true, short: "code" })}' \
+  -o map.svg target=*
+```
+
+The labels are placed on the SVG page: `width` and `margin` (pixels) fit `bbox` (projected units, the target layer's by default) to it, and the returned commands start with the matching `-frame`. Point symbols take their radius from the `r` field that `-style r=` writes (or `r`: a number or a field), polygons are labelled at an interior point within their outline. The function writes `lp_visible`, `lp_blocked` and `lp_overlapping` back to the layer, adds a `<layer>-leaders` line layer under a `<layer>-labels` layer of points at their text positions, and styles it with `-labels`: `labelStyle` adds options (`fill`, `halo-width`...), `leaderStyle` styles the leaders. Its other options are those of `placeLabels` in pixels, plus `fontSize`, `fontWeight`, `lineHeight`, `priority` (a field, else the radius), `required` or `mode` (a field), `twoLines`, `short` (a field, at `shortCost`, 10), `leaders` (the share of labels, most important first, that may take a leader), `land` (GeoJSON in projected units, names prefer the sea) and `onPlace`. Text is measured with the metrics of Helvetica and Arial, the fonts the labels name first; the adapter exports that measure, `textWidth(text, fontSize, bold?)`, for scripts in Node. `-require` and `-run` work on the command line, not in the web console: place there, then open the SVG or the layers in mapshaper.org.
 
 **MapLibre**: write the result as GeoJSON properties and turn MapLibre's own collision off (`text-allow-overlap` and `text-ignore-placement`), so it does not place the labels again. `text-anchor` names the side of the text at the anchor: a `top-right` placement is `text-anchor: bottom-left`. Leaders go in a `line` layer after `map.unproject`.
 
@@ -303,6 +334,18 @@ Algorithmic inspirations, none of whose code is reused: Christensen, Marks & Shi
 *Ambiguous*: labels next to their symbol with another symbol, not under the label, at least as close. Every commune has a symbol, so in these dense scenes a label rarely finds a spot clear of the smallest ones; without the ambiguity cost, Bretagne counts 218 and its 100 largest 50.
 
 The top 100 of the larger scenarios is capped by the Paris area, where the largest communes are too close together for 9 px labels on an A4 page.
+
+## Development
+
+```sh
+pnpm install
+pnpm test        # vitest
+pnpm build       # type check, ES and CommonJS builds, declarations
+pnpm build:docs  # rebuild the engine embedded in the demo pages
+pnpm bench       # place the names of French communes (see Benchmark)
+```
+
+The scripts run TypeScript natively: Node 22.18 or later. The demo pages in `docs/` embed their own build of the engine, so that they open without a server: run `pnpm build:docs` after a change to `src/`. The demo page also replays the greedy pass and the ejection chains step by step, and checks that its replay matches `placeLabels`: a change to those passes has to be mirrored in its script.
 
 ## Roadmap
 

@@ -45,4 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PlacedLabel.blocked` and `stats.blocked`: a hidden label with no spot clear of the static obstacles and the bounds, told from one crowded out by other labels
 - `placeText()` (`@ateliercartographie/label-placer/plot`): an Observable Plot `render` function for text marks, with the land as GeoJSON, `onPlace` and a `debug` view of the labels left to look at
 - Demo: `docs/exemple-plot.html`, the countries of Europe and a Gapminder scatterplot drawn with Observable Plot, each against Plot alone, at the width of the page, the scatterplot by year with `previous`
+- `labels()` (`@ateliercartographie/label-placer/mapshaper`): a Mapshaper `-run` function that places the labels of a point or polygon layer on the SVG page and returns the `-frame`, `-i` and `-labels` commands that draw them, leaders as a line layer; text measured with the metrics of Helvetica and Arial
+- Package: public npm metadata, the CHANGELOG in the tarball, `pnpm build:docs` to rebuild the engine embedded in the demo pages
 - Benchmark on French communes
