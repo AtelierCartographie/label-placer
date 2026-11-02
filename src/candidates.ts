@@ -1,5 +1,5 @@
 import { flushAlignment, leaderGeometry, symbolExtent } from './leader.ts';
-import { boxRelation, boxSlots, ringsBox } from './polygon.ts';
+import { boxRelation, boxSlots, pointInRings, ringsBox } from './polygon.ts';
 import type { Box, LabelInput, LeaderStyle, Placement, Point, Position, TextAnchor } from './types.ts';
 
 export interface Candidate {
@@ -15,6 +15,8 @@ export interface Candidate {
   leader: Point[] | null;
   /** 0 for the label's own size, k for its `layouts[k - 1]`. */
   layout: number;
+  /** Over its polygon's outline, the share of the box out of it: onto the neighbours. */
+  overflow: number;
   /**
    * Static hard coverage of a blocked candidate, as an area: hard obstacles under the box,
    * a strip one label height wide along the leader where it crosses one, the box out of
@@ -75,7 +77,7 @@ export function makeCandidate(
       bx1 = Math.max(bx1, x);
       by1 = Math.max(by1, y);
     }
-  return { x0: box[0], y0: box[1], x1: box[2], y1: box[3], cost, placement, ring, textAnchor, baseline, leader, layout: 0, hard: 0, bx0, by0, bx1, by1 };
+  return { x0: box[0], y0: box[1], x1: box[2], y1: box[3], cost, placement, ring, textAnchor, baseline, leader, layout: 0, overflow: 0, hard: 0, bx0, by0, bx1, by1 };
 }
 
 /** Grid of offsets, in label heights, for a label inside its polygon: nearest to the anchor first. */
@@ -84,12 +86,26 @@ for (let dy = -6; dy <= 6; dy++) for (let dx = -8; dx <= 8; dx++) POLYGON_OFFSET
 POLYGON_OFFSETS.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
 /** Cost of moving a label inside its polygon away from its anchor, per label height. */
 const POLYGON_SHIFT_COST = 0.5;
+/** Most candidates over the outline, nearest the anchor first, and their largest share out of the polygon. */
+const POLYGON_OVERFLOWS = 8;
+const MAX_OVERFLOW = 0.4;
+/** Over its outline, a label costs as much as a side spot next to it, and more for its share out. */
+const OVERFLOW_BASE_COST = 3;
+/** Cost of a box all out of its polygon, for its share over the outline. */
+const OVERFLOW_COST = 6;
 /** Extra cost of a polygon label's taller layout out of its polygon. */
 const OUTSIDE_TALLER_COST = 2;
 /** Shift beyond which, in label heights, moving further inside the polygon costs a tenth as much. */
 const POLYGON_FAR_SHIFT = 4;
 /** Most slots kept from the scanlines, beyond the grid around the anchor. */
 const POLYGON_SLOTS = 12;
+
+/** Share of the box in the rings, sampled on a 5 × 3 grid. */
+export function boxShareIn([x0, y0, x1, y1]: Box, rings: Point[][]): number {
+  let n = 0;
+  for (let a = 0; a < 5; a++) for (let b = 0; b < 3; b++) if (pointInRings(x0 + ((a + 0.5) / 5) * (x1 - x0), y0 + ((b + 0.5) / 3) * (y1 - y0), rings)) n++;
+  return n / 15;
+}
 
 /** Candidates of a movable label, in each of its layouts, sorted by cost. */
 export function buildCandidates(label: LabelInput, s: CandidateSettings): Candidate[] {
@@ -114,12 +130,24 @@ function layoutCandidates(label: LabelInput, w: number, h: number, s: CandidateS
   if (symbol?.type === 'polygon') {
     if (s.inside) {
       const bbox = ringsBox(symbol.rings);
+      const overflows: Candidate[] = [];
+      let overflowing = 0;
       for (const [ox, oy] of POLYGON_OFFSETS) {
         const cx = x + ox * s.unit;
         const cy = y + oy * s.unit;
         const box: Box = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2];
-        if (boxRelation(box, symbol.rings, bbox) === 'inside')
-          out.push(makeCandidate(box, INSIDE_COST + POLYGON_SHIFT_COST * Math.hypot(ox, oy), 'center', 0, 'middle', 'middle', null));
+        const relation = boxRelation(box, symbol.rings, bbox);
+        if (relation === 'inside') out.push(makeCandidate(box, INSIDE_COST + POLYGON_SHIFT_COST * Math.hypot(ox, oy), 'center', 0, 'middle', 'middle', null));
+        else if (relation === 'crossing' && overflowing < POLYGON_OVERFLOWS) {
+          // A little over the outline, onto the neighbours: worse than next to it, better than far off on a leader.
+          const share = 1 - boxShareIn(box, symbol.rings);
+          if (share <= MAX_OVERFLOW && pointInRings(cx, cy, symbol.rings)) {
+            const c = makeCandidate(box, OVERFLOW_BASE_COST + POLYGON_SHIFT_COST * Math.hypot(ox, oy) + OVERFLOW_COST * share, 'center', 0, 'middle', 'middle', null);
+            c.overflow = Math.max(share, 1 / 15);
+            overflows.push(c);
+            overflowing++;
+          }
+        }
       }
       // Farther, wherever the box fits: the slots of the scanlines, nearest first, apart from each other.
       const kept: Point[] = out.map((c) => [(c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2]);
@@ -139,6 +167,7 @@ function layoutCandidates(label: LabelInput, w: number, h: number, s: CandidateS
         kept.push([slot.x, slot.y]);
         added++;
       }
+      out.push(...overflows);
     }
   } else if (symbol?.type === 'area') {
     const halfDiagonal = Math.hypot(w / 2, h / 2);

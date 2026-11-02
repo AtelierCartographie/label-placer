@@ -328,16 +328,22 @@ describe('placeLabels', () => {
 
   it('sends a polygon label with a leader out of the other polygons when it can', () => {
     const square = (x0: number, y0: number, x1: number, y1: number) => ({ type: 'polygon' as const, rings: [[[x0, y0], [x1, y0], [x1, y1], [x0, y1]] as Point[]] });
-    const small: LabelInput = { x: 180, y: 50, width: 50, height: 10, symbol: square(160, 40, 200, 60) };
+    // Twice as wide as its area: too much of it would lie over the neighbour.
+    const small: LabelInput = { x: 180, y: 50, width: 80, height: 10, symbol: square(160, 40, 200, 60) };
     const neighbour: LabelInput = { x: 250, y: 20, width: 10, height: 10, symbol: square(200, 0, 300, 100) };
     // The spot next to it on the left is taken, on the right it lies in the neighbour.
-    const r = placeLabels([small, neighbour], {
+    const options: PlaceOptions = {
       bounds: [0, 0, 400, 200],
       positions: ['right', 'left'],
       leader: { rings: [10] },
       obstacles: [{ type: 'rect', box: [150, 45, 156, 48] }]
-    }).labels[0];
+    };
+    const r = placeLabels([small, neighbour], options).labels[0];
     expect([r.placement, r.ring]).toEqual(['left', 1]);
+    // A little wider than its area, it rather spills over the neighbour, never over the sea.
+    const spill = placeLabels([{ ...small, width: 50 }, neighbour], options).labels[0];
+    expect([spill.placement, spill.ring]).toEqual(['center', 0]);
+    expect(spill.box![0]).toBeGreaterThanOrEqual(160);
   });
 
   it('lets an area take its own room before a neighbour sets its label there', () => {

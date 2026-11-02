@@ -5,7 +5,7 @@ import { Grid } from './grid.ts';
 import { flushAlignment, leaderGeometry, symbolExtent } from './leader.ts';
 import { ObstacleRaster } from './obstacles.ts';
 import { boxRelation, boxRingsDistance, pointInRings, ringsBox } from './polygon.ts';
-import type { Box, GroupInput, LabelInput, LabelMode, PlaceOptions, PlacedGroup, PlacedLabel, PlacementResult, Point } from './types.ts';
+import type { Box, GroupInput, LabelInput, LabelMode, LabelSymbol, PlaceOptions, PlacedGroup, PlacedLabel, PlacementResult, Point } from './types.ts';
 
 const MODE_RANK: Record<LabelMode, number> = { pinned: 0, required: 1, optional: 2 };
 const MAX_RASTER_CELLS = 4_000_000;
@@ -15,6 +15,8 @@ const NAMED_NEIGHBOUR = 2;
 const EMPTY_NEIGHBOUR = 0.5;
 /** Cost of a leader running into another polygon, in ambiguity costs, for each one. */
 const CROSSED_AREA = 0.5;
+/** Closest two leaders may run alongside each other, in label heights. */
+const LEADER_GAP = 0.4;
 const CHAIN_DEPTH = 1;
 /** Named anchors closer than this many label heights belong to the same cluster when aligning. */
 const ALIGN_REACH = 4;
@@ -81,7 +83,37 @@ const STACKED = new Set(['column', 'margin', 'dodge']);
  * Whether two candidates clash: boxes, or a leader and a box, closer than `spacing` (except two
  * stacked ones, set in columns or rows on purpose), or crossing leaders.
  */
-function candidatesConflict(a: Candidate, b: Candidate, spacing = 0): boolean {
+/** Distance from (px, py) to the segment a–b. */
+function segmentDistance(px: number, py: number, [ax, ay]: Point, [bx, by]: Point): number {
+  const ex = bx - ax;
+  const ey = by - ay;
+  const l2 = ex * ex + ey * ey;
+  const t = l2 > 0 ? Math.min(1, Math.max(0, ((px - ax) * ex + (py - ay) * ey) / l2)) : 0;
+  return Math.hypot(ax + t * ex - px, ay + t * ey - py);
+}
+
+/**
+ * Whether two leaders run closer than `gap`, their first `gap` aside (anchors may be close):
+ * side by side, they read as one line, or as each other's.
+ */
+function leadersAlong(a: Point[], b: Point[], gap: number): boolean {
+  for (let i = 1; i < a.length; i++) {
+    const [ax, ay] = a[i - 1];
+    const len = Math.hypot(a[i][0] - ax, a[i][1] - ay);
+    const steps = Math.ceil(len / (gap / 2));
+    for (let k = 0; k <= steps; k++) {
+      const t = steps ? k / steps : 0;
+      const x = ax + t * (a[i][0] - ax);
+      const y = ay + t * (a[i][1] - ay);
+      if (i === 1 && Math.hypot(x - a[0][0], y - a[0][1]) < gap) continue;
+      for (let j = 1; j < b.length; j++)
+        if (segmentDistance(x, y, b[j - 1], b[j]) < gap && Math.hypot(x - b[0][0], y - b[0][1]) >= gap) return true;
+    }
+  }
+  return false;
+}
+
+function candidatesConflict(a: Candidate, b: Candidate, spacing = 0, leaderGap = 0): boolean {
   const sp = spacing > 0 && !(STACKED.has(a.placement) && STACKED.has(b.placement)) ? spacing : 0;
   if (boxesOverlap(a.x0 - sp, a.y0 - sp, a.x1 + sp, a.y1 + sp, b.x0, b.y0, b.x1, b.y1)) return true;
   if (a.leader && leaderHitsBox(a.leader, b, sp)) return true;
@@ -93,6 +125,8 @@ function candidatesConflict(a: Candidate, b: Candidate, spacing = 0): boolean {
         const [r, s] = [b.leader[j - 1], b.leader[j]];
         if (segmentsCross(p[0], p[1], q[0], q[1], r[0], r[1], s[0], s[1])) return true;
       }
+    // Stacked labels' leaders run side by side by design, in order.
+    if (leaderGap > 0 && !(STACKED.has(a.placement) && STACKED.has(b.placement)) && leadersAlong(a.leader, b.leader, leaderGap)) return true;
   }
   return false;
 }
@@ -174,6 +208,8 @@ export class Placer {
   /** Ambiguity is costed lazily, once a label has a chance to be shown. */
   private readonly features: Features | null;
   private readonly ambiguityCost: number;
+  /** Closest two leaders may run alongside each other. */
+  private readonly leaderGap: number;
   private readonly ambiguityMargin: number;
   private readonly resolved: Uint8Array;
   private readonly polygons: Grid;
@@ -258,6 +294,7 @@ export class Placer {
     raster.finalize();
 
     this.ambiguityCost = options.ambiguity?.cost ?? 6;
+    this.leaderGap = LEADER_GAP * unit;
     this.ambiguityMargin = options.ambiguity?.margin ?? 0.5 * unit;
     this.features = this.ambiguityCost > 0 ? new Features(input, options.bounds, unit * 2) : null;
     this.resolved = new Uint8Array(n);
@@ -349,7 +386,9 @@ export class Placer {
     const astride =
       l.symbol?.type === 'polygon' &&
       c.placement !== 'center' &&
-      (boxRelation(box, l.symbol.rings, this.polygonBoxes[i]) !== 'outside' || (c.ring === 0 && this.inOtherPolygon(i, box)));
+      (boxRelation(box, l.symbol.rings, this.polygonBoxes[i]) !== 'outside' || (c.ring === 0 && this.inOtherPolygon(i, box))) ||
+      // Over its outline, only onto neighbours: never across a coastline.
+      (c.overflow > 0 && this.overSea(i, box));
     let crossed = 0;
     let softCrossed = 0;
     for (let k = 1; k < (c.leader?.length ?? 0); k++) {
@@ -618,6 +657,7 @@ export class Placer {
       for (const list of [this.feasible[i], this.farther[i], this.blocked[i]]) {
         for (const c of list)
           if (c.ring > 0) c.cost += this.ambiguityCost * (this.neighbourShare(i, [c.x0, c.y0, c.x1, c.y1]) + CROSSED_AREA * this.areasCrossed(i, c));
+          else if (c.overflow) c.cost += this.ambiguityCost * this.neighbourShare(i, [c.x0, c.y0, c.x1, c.y1]);
         list.sort((a, b) => a.cost - b.cost);
       }
     }
@@ -669,6 +709,36 @@ export class Placer {
     return crossed.size;
   }
 
+  /** Whether placed polygon label i lies wholly in its own area, from which no chain ejects it. */
+  private inOwnArea(i: number): boolean {
+    const c = this.current[i]!;
+    return c.placement === 'center' && !c.overflow && this.labels[i].symbol?.type === 'polygon';
+  }
+
+  /** Whether a point of the box out of polygon i's own outline is in no other polygon either. */
+  private overSea(i: number, [x0, y0, x1, y1]: Box): boolean {
+    const own = this.labels[i].symbol as Extract<LabelSymbol, { type: 'polygon' }>;
+    const [i0, j0, i1, j1] = this.polygons.range(x0, y0, x1, y1);
+    const near = new Set<number>();
+    for (let j = j0; j <= j1; j++) for (let ii = i0; ii <= i1; ii++) for (const k of this.polygons.cells[j * this.polygons.nx + ii]) if (k !== i) near.add(k);
+    for (let a = 0; a < 5; a++)
+      for (let b = 0; b < 3; b++) {
+        const x = x0 + ((a + 0.5) / 5) * (x1 - x0);
+        const y = y0 + ((b + 0.5) / 3) * (y1 - y0);
+        if (pointInRings(x, y, own.rings)) continue;
+        let land = false;
+        for (const k of near) {
+          const s = this.labels[k].symbol;
+          if (s?.type === 'polygon' && pointInRings(x, y, s.rings)) {
+            land = true;
+            break;
+          }
+        }
+        if (!land) return true;
+      }
+    return false;
+  }
+
   /** Whether the box of polygon label i lies in, or across, another label's polygon. */
   private inOtherPolygon(i: number, box: Box): boolean {
     const [i0, j0, i1, j1] = this.polygons.range(box[0], box[1], box[2], box[3]);
@@ -713,7 +783,7 @@ export class Placer {
           if (k === i || this.stamp[k] === s) continue;
           this.stamp[k] = s;
           const other = this.current[k];
-          if (other && candidatesConflict(c, other, sp)) {
+          if (other && candidatesConflict(c, other, sp, this.leaderGap)) {
             out.push(k);
             if (out.length >= limit) return out;
           }
@@ -754,7 +824,7 @@ export class Placer {
     // must not take the room its neighbour needs inside.
     for (const i of this.order) {
       if (this.fixed(i) || this.labels[i].symbol?.type !== 'polygon') continue;
-      const inside = this.resolve(i).filter((c) => c.placement === 'center');
+      const inside = this.resolve(i).filter((c) => c.placement === 'center' && !c.overflow);
       const key = previous?.[i];
       const kept = key ? inside.find((c) => candidateKey(c) === key && this.isFree(i, c)) : undefined;
       if (kept) this.sticky.add(i);
@@ -862,7 +932,7 @@ export class Placer {
           const blockers = this.conflicts(i, c, CHAIN_MAX_EJECT + 1);
           if (blockers.length > CHAIN_MAX_EJECT) continue;
           // A label inside its own area keeps it: no other label may take that room from it.
-          if (blockers.some((b) => !this.isMovable(b) || (this.current[b]!.placement === 'center' && this.labels[b].symbol?.type === 'polygon'))) continue;
+          if (blockers.some((b) => !this.isMovable(b) || this.inOwnArea(b))) continue;
           this.journal = new Map();
           for (const b of blockers) this.unplace(b);
           this.place(i, c);
@@ -1171,7 +1241,7 @@ export class Placer {
         // A required label pushed aside might find no room again: a block never pushes one.
         if (
           blockers.some(
-            (b) => !this.isMovable(b) || this.mode(b) === 'required' || this.priority(b) >= this.priority(p) || (this.current[b]!.placement === 'center' && this.labels[b].symbol?.type === 'polygon')
+            (b) => !this.isMovable(b) || this.mode(b) === 'required' || this.priority(b) >= this.priority(p) || this.inOwnArea(b)
           )
         )
           continue;

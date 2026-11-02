@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `leaderGeometry({ polygonInset })`: into a polygon, the leader starts that far past the outline
+- Polygons: a name a little wider than its area may spill over its neighbours, up to 40% of it, never over the sea, rather than go far off on a leader (leaders: 42 to 14 on the départements at 600 px, 12 to 1 on the Europe demo)
+- Leaders: two never run alongside each other closer than 0.4 label heights
 
 ### Changed
 
