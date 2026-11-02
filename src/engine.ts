@@ -640,7 +640,9 @@ export class Placer {
       if (c.ring > 0 || c.placement === 'inside' || c.placement === 'center') continue;
       const box: Box = [c.x0, c.y0, c.x1, c.y1];
       const own = symbol?.type === 'polygon' ? boxRingsDistance(box, symbol.rings) : undefined;
-      c.cost += this.ambiguityCost * this.features.ambiguity(i, box, this.ambiguityMargin, own);
+      let ambiguity = this.features.ambiguity(i, box, this.ambiguityMargin, own);
+      if (own !== undefined && ambiguity < 1) ambiguity = Math.max(ambiguity, this.outlineAmbiguity(i, box, own));
+      c.cost += this.ambiguityCost * ambiguity;
     }
     list.sort((a, b) => a.cost - b.cost);
     return list;
@@ -707,6 +709,34 @@ export class Placer {
           }
     }
     return crossed.size;
+  }
+
+  /**
+   * Out of its polygon, from 0, every other polygon at least the ambiguity margin farther from
+   * the box than its own, to 1, one as close: at sea, a name off the border of two areas, or
+   * off its neighbour's coast, names either.
+   */
+  private outlineAmbiguity(i: number, box: Box, own: number): number {
+    const margin = this.ambiguityMargin;
+    const reach = own + margin;
+    const [i0, j0, i1, j1] = this.polygons.range(box[0] - reach, box[1] - reach, box[2] + reach, box[3] + reach);
+    const seen = new Set<number>();
+    let worst = 0;
+    for (let j = j0; j <= j1; j++)
+      for (let ii = i0; ii <= i1; ii++)
+        for (const k of this.polygons.cells[j * this.polygons.nx + ii]) {
+          if (k === i || seen.has(k)) continue;
+          seen.add(k);
+          const s = this.labels[k].symbol;
+          if (s?.type !== 'polygon') continue;
+          const [x0, y0, x1, y1] = this.polygonBoxes[k];
+          if (Math.hypot(Math.max(0, x0 - box[2], box[0] - x1), Math.max(0, y0 - box[3], box[1] - y1)) >= reach) continue;
+          const d = boxRingsDistance(box, s.rings);
+          if (d >= reach) continue;
+          if (margin <= 0 || d <= own) return 1;
+          worst = Math.max(worst, (reach - d) / margin);
+        }
+    return worst;
   }
 
   /** Whether placed polygon label i lies wholly in its own area, from which no chain ejects it. */

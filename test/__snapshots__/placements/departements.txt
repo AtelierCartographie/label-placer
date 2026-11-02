@@ -54,7 +54,7 @@
 52 Eure-et-Loir | center:0:1 461.9,208.2
 53 Var | center:0:0 715.1,564.3
 54 Doubs | center:0:0 707.8,292.7
-55 Pas-de-Calais | left:0:0 440.7,51.9
+55 Pas-de-Calais | center:0:0 505.0,51.9
 56 Meuse | center:0:0 654.4,159.5
 57 Charente | center:0:0 400.6,395.8
 58 Haute-Marne | center:0:1 647.9,224.4

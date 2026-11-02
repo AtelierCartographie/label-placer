@@ -697,3 +697,21 @@ describe('names over neighbouring polygons', () => {
     expect(l.box![2]).toBeLessThanOrEqual(200);
   });
 });
+
+describe('names at sea', () => {
+  it('keeps a name at sea off the border of two areas, nearer its own', () => {
+    const square = (x0: number, y0: number, x1: number, y1: number): Point[][] => [[[x0, y0], [x1, y0], [x1, y1], [x0, y1]]];
+    // Two islands, one above the other; the southern one's anchor close to their border.
+    const labels: LabelInput[] = [
+      { x: 120, y: 120, width: 30, height: 12, symbol: { type: 'polygon', rings: square(100, 100, 140, 140) } },
+      { x: 120, y: 146, width: 70, height: 12, symbol: { type: 'polygon', rings: square(100, 140, 140, 180) }, mode: 'required' }
+    ];
+    const [, south] = placeLabels(labels, { bounds: [0, 0, 300, 300] }).labels;
+    expect(south.leader).toBeNull();
+    // Nearer its own outline than the northern island's, by half a label height at least.
+    const [x0, y0, x1, y1] = south.box!;
+    const toNorth = Math.hypot(Math.max(0, 100 - x1, x0 - 140), Math.max(0, y0 - 140));
+    const toSouth = Math.hypot(Math.max(0, 100 - x1, x0 - 140), Math.max(0, 140 - y1, y0 - 180));
+    expect(toNorth).toBeGreaterThanOrEqual(toSouth + 6);
+  });
+});
