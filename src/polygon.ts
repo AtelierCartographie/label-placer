@@ -85,3 +85,61 @@ export function boxRingsDistance(box: Box, rings: Point[][]): number {
     }
   return best;
 }
+
+/** Spans of the scanline y inside the rings, by the even-odd rule, as sorted [x0, x1] pairs. */
+function scanSpans(y: number, rings: Point[][]): number[] {
+  const xs: number[] = [];
+  for (const ring of rings)
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i];
+      const [xj, yj] = ring[j];
+      if (yi > y !== yj > y) xs.push(((xj - xi) * (y - yi)) / (yj - yi) + xi);
+    }
+  return xs.sort((a, b) => a - b);
+}
+
+/** Intersection of two sorted span lists. */
+function intersectSpans(a: number[], b: number[]): number[] {
+  const out: number[] = [];
+  for (let i = 0, j = 0; i < a.length && j < b.length; ) {
+    const x0 = Math.max(a[i], b[j]);
+    const x1 = Math.min(a[i + 1], b[j + 1]);
+    if (x1 > x0) out.push(x0, x1);
+    if (a[i + 1] < b[j + 1]) i += 2;
+    else j += 2;
+  }
+  return out;
+}
+
+/**
+ * Centers where a w × h box fits inside the rings, found by scanlines a quarter of h apart:
+ * the spans common to the lines a box covers, wide enough for it, give a run of centers,
+ * of which the middle is kept, and points w apart along the longer runs. Each comes with
+ * its clearance: the room left on its tighter side, horizontally. Boxes still have to be
+ * checked against the outline, which may poke between two scanlines.
+ */
+export function boxSlots(rings: Point[][], w: number, h: number, bbox: Box = ringsBox(rings), maxLines = 400): { x: number; y: number; clearance: number }[] {
+  const [, by0, , by1] = bbox;
+  if (by1 - by0 < h) return [];
+  const step = Math.max(h / 4, (by1 - by0) / maxLines);
+  const k = Math.ceil(h / step);
+  const lines: number[][] = [];
+  for (let y = by0 + step / 2; y < by1; y += step) lines.push(scanSpans(y, rings));
+  const out: { x: number; y: number; clearance: number }[] = [];
+  for (let i = 0; i + k < lines.length; i++) {
+    let spans = lines[i];
+    for (let j = 1; j <= k && spans.length; j++) spans = intersectSpans(spans, lines[i + j]);
+    const cy = by0 + step / 2 + (i * step) + (k * step) / 2;
+    for (let s = 0; s < spans.length; s += 2) {
+      const room = spans[s + 1] - spans[s] - w;
+      if (room < 0) continue;
+      const a = spans[s] + w / 2;
+      const n = Math.floor(room / w);
+      for (let m = 0; m <= n; m++) {
+        const cx = n === 0 ? a + room / 2 : a + (m * room) / n;
+        out.push({ x: cx, y: cy, clearance: Math.min(cx - w / 2 - spans[s], spans[s + 1] - cx - w / 2) });
+      }
+    }
+  }
+  return out;
+}

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Polygons: beyond the grid around the anchor, a label is also tried wherever its box fits in the polygon, in each of its layouts, found by scanlines; fewer leaders (28 to 23 on the 96 départements)
+- Polygons: a name with a leader keeps off the areas whose own name is inside them, out to sea or into an unnamed area, its leaders reaching two rings farther (names over a named neighbour: 13 to 9 on the Europe demo)
+
 ## [0.3.0] - 2026-11-02
 
 ### Added

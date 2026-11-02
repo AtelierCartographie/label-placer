@@ -4,12 +4,15 @@ import { Features } from './features.ts';
 import { Grid } from './grid.ts';
 import { flushAlignment, leaderGeometry, symbolExtent } from './leader.ts';
 import { ObstacleRaster } from './obstacles.ts';
-import { boxRelation, boxRingsDistance, ringsBox } from './polygon.ts';
+import { boxRelation, boxRingsDistance, pointInRings, ringsBox } from './polygon.ts';
 import type { Box, GroupInput, LabelInput, LabelMode, PlaceOptions, PlacedGroup, PlacedLabel, PlacementResult, Point } from './types.ts';
 
 const MODE_RANK: Record<LabelMode, number> = { pinned: 0, required: 1, optional: 2 };
 const MAX_RASTER_CELLS = 4_000_000;
 const CHAIN_MAX_EJECT = 2;
+/** Weight of a box over a neighbouring polygon, in ambiguity costs: named inside, or its name out of it. */
+const NAMED_NEIGHBOUR = 2;
+const EMPTY_NEIGHBOUR = 0.5;
 const CHAIN_DEPTH = 1;
 /** Named anchors closer than this many label heights belong to the same cluster when aligning. */
 const ALIGN_REACH = 4;
@@ -294,12 +297,14 @@ export class Placer {
         this.blocked.push([]);
         continue;
       }
-      const rings = l.mode === 'required' && settings.rings.length ? [...settings.rings, Math.max(...settings.rings) + unit] : settings.rings;
+      // A polygon label reaches farther, out to sea or into an area left unnamed, rather than over a neighbour's name.
+      const reach = l.symbol?.type === 'polygon' && settings.rings.length ? [...settings.rings, Math.max(...settings.rings) + unit, Math.max(...settings.rings) + 2 * unit] : settings.rings;
+      const rings = l.mode === 'required' && reach.length ? [...reach, Math.max(...reach) + unit] : reach;
       const ok: Candidate[] = [];
       const far: Candidate[] = [];
       const ko: Candidate[] = [];
       // A block goes around its members, never over them.
-      for (const c of buildCandidates(l, { ...settings, rings, inside: settings.inside && !this.isGroup(i) })) (this.classify(i, c) ? ko : c.ring > settings.rings.length ? far : ok).push(c);
+      for (const c of buildCandidates(l, { ...settings, rings, inside: settings.inside && !this.isGroup(i) })) (this.classify(i, c) ? ko : c.ring > reach.length ? far : ok).push(c);
       ok.sort((a, b) => a.cost - b.cost);
       far.sort((a, b) => a.cost - b.cost);
       this.feasible.push(ok);
@@ -355,8 +360,6 @@ export class Placer {
     const over = leaderOverSymbols ? crossed : 0;
     if (softCost > 0) c.cost += (softCost * (raster.softArea(box) + (softCrossed + over + raster.softLineLength(box)) * unit)) / (unit * unit);
     c.cost += raster.polygonCost(box);
-    // A leader names its polygon, but the label is still better out of the others.
-    if (l.symbol?.type === 'polygon' && c.ring > 0 && this.inOtherPolygon(i, box)) c.cost += this.ambiguityCost;
     if (!outside && !hit) return false;
     const area = (c.x1 - c.x0) * (c.y1 - c.y0);
     c.hard = (coverage + lines) / (this.resolution * this.resolution) + crossed * unit + areaOutside(box, this.bounds) + (astride ? area / 2 : 0);
@@ -602,6 +605,44 @@ export class Placer {
     return list;
   }
 
+  /**
+   * A leader names its polygon, but the label is still better out of the others, and most of
+   * all out of those whose own name is inside them: two names in one area read as the wrong
+   * one. Costed once the areas have taken their spots inside, by the share of the box over each.
+   */
+  private costNeighbours(): void {
+    for (let i = 0; i < this.labels.length; i++) {
+      if (this.labels[i].symbol?.type !== 'polygon' || this.fixed(i)) continue;
+      for (const list of [this.feasible[i], this.farther[i], this.blocked[i]]) {
+        for (const c of list) if (c.ring > 0) c.cost += this.ambiguityCost * this.neighbourShare(i, [c.x0, c.y0, c.x1, c.y1]);
+        list.sort((a, b) => a.cost - b.cost);
+      }
+    }
+  }
+
+  /** Share of the box of polygon label i over the other polygons, weighed by whether their own name is inside. */
+  private neighbourShare(i: number, box: Box): number {
+    if (!this.inOtherPolygon(i, box)) return 0;
+    const [x0, y0, x1, y1] = box;
+    const [i0, j0, i1, j1] = this.polygons.range(x0, y0, x1, y1);
+    const near = new Set<number>();
+    for (let j = j0; j <= j1; j++) for (let ii = i0; ii <= i1; ii++) for (const k of this.polygons.cells[j * this.polygons.nx + ii]) if (k !== i) near.add(k);
+    let share = 0;
+    for (let a = 0; a < 5; a++)
+      for (let b = 0; b < 3; b++) {
+        const x = x0 + ((a + 0.5) / 5) * (x1 - x0);
+        const y = y0 + ((b + 0.5) / 3) * (y1 - y0);
+        for (const k of near) {
+          const s = this.labels[k].symbol;
+          if (s?.type !== 'polygon' || !pointInRings(x, y, s.rings)) continue;
+          share += (this.current[k]?.placement === 'center' ? NAMED_NEIGHBOUR : EMPTY_NEIGHBOUR) / 15;
+          break;
+        }
+      }
+    // Across a corner of a neighbour, still a little.
+    return Math.max(0.25, share);
+  }
+
   /** Whether the box of polygon label i lies in, or across, another label's polygon. */
   private inOtherPolygon(i: number, box: Box): boolean {
     const [i0, j0, i1, j1] = this.polygons.range(box[0], box[1], box[2], box[3]);
@@ -694,6 +735,7 @@ export class Placer {
       const chosen = kept ?? inside.find((c) => this.isFree(i, c));
       if (chosen) this.place(i, chosen);
     }
+    this.costNeighbours();
     for (const i of this.order) {
       const list = this.feasible[i];
       // A symbol alone has nothing to show, required or not.

@@ -1,5 +1,5 @@
 import { flushAlignment, leaderGeometry, symbolExtent } from './leader.ts';
-import { boxRelation, ringsBox } from './polygon.ts';
+import { boxRelation, boxSlots, ringsBox } from './polygon.ts';
 import type { Box, LabelInput, LeaderStyle, Placement, Point, Position, TextAnchor } from './types.ts';
 
 export interface Candidate {
@@ -84,6 +84,10 @@ for (let dy = -6; dy <= 6; dy++) for (let dx = -8; dx <= 8; dx++) POLYGON_OFFSET
 POLYGON_OFFSETS.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
 /** Cost of moving a label inside its polygon away from its anchor, per label height. */
 const POLYGON_SHIFT_COST = 0.5;
+/** Shift beyond which, in label heights, moving further inside the polygon costs a tenth as much. */
+const POLYGON_FAR_SHIFT = 4;
+/** Most slots kept from the scanlines, beyond the grid around the anchor. */
+const POLYGON_SLOTS = 12;
 
 /** Candidates of a movable label, in each of its layouts, sorted by cost. */
 export function buildCandidates(label: LabelInput, s: CandidateSettings): Candidate[] {
@@ -112,6 +116,24 @@ function layoutCandidates(label: LabelInput, w: number, h: number, s: CandidateS
         const box: Box = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2];
         if (boxRelation(box, symbol.rings, bbox) === 'inside')
           out.push(makeCandidate(box, INSIDE_COST + POLYGON_SHIFT_COST * Math.hypot(ox, oy), 'center', 0, 'middle', 'middle', null));
+      }
+      // Farther, wherever the box fits: the slots of the scanlines, nearest first, apart from each other.
+      const kept: Point[] = out.map((c) => [(c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2]);
+      const apart = Math.max(s.unit, h);
+      const slots = boxSlots(symbol.rings, w, h, bbox).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
+      let added = 0;
+      for (const slot of slots) {
+        if (added >= POLYGON_SLOTS) break;
+        if (kept.some(([kx, ky]) => Math.abs(kx - slot.x) < w / 2 + apart / 2 && Math.abs(ky - slot.y) < apart)) continue;
+        const box: Box = [slot.x - w / 2, slot.y - h / 2, slot.x + w / 2, slot.y + h / 2];
+        if (boxRelation(box, symbol.rings, bbox) !== 'inside') continue;
+        const shift = Math.hypot(slot.x - x, slot.y - y) / s.unit;
+        const far = shift <= POLYGON_FAR_SHIFT ? shift : POLYGON_FAR_SHIFT + (shift - POLYGON_FAR_SHIFT) / 10;
+        // A box that grazes the outline reads as squeezed.
+        const tight = slot.clearance < s.unit / 4 ? 0.25 : 0;
+        out.push(makeCandidate(box, INSIDE_COST + POLYGON_SHIFT_COST * far + tight, 'center', 0, 'middle', 'middle', null));
+        kept.push([slot.x, slot.y]);
+        added++;
       }
     }
   } else if (symbol?.type === 'area') {

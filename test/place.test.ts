@@ -661,3 +661,33 @@ describe('placeLabels', () => {
     expect(result.stats.placed).toBeGreaterThanOrEqual(greedy.stats.placed);
   });
 });
+
+describe('polygon slots', () => {
+  it('tries a label in the far arm of an L where it fits, below a leader', async () => {
+    const { buildCandidates } = await import('../src/candidates.ts');
+    // An L: a narrow vertical arm at the anchor, a wide foot far below.
+    const rings = [[[0, 0], [20, 0], [20, 200], [200, 200], [200, 230], [0, 230]] as Point[]];
+    const settings = { positions: DEFAULT_POSITIONS, gap: 2, inside: true, rings: [10], leaderStyle: 'straight' as const, symbolGap: 1, minGap: 1, leaderBaseCost: 8, leaderLengthCost: 2, areaOverflowCost: 1, unit: 12 };
+    const candidates = buildCandidates({ x: 10, y: 20, width: 120, height: 12, symbol: { type: 'polygon', rings } }, settings);
+    const inside = candidates.filter((c) => c.placement === 'center');
+    expect(inside.length).toBeGreaterThan(0);
+    expect(inside.every((c) => c.y0 >= 200 && c.y1 <= 230 && c.x0 >= 0 && c.x1 <= 200)).toBe(true);
+    expect(Math.max(...inside.map((c) => c.cost))).toBeLessThan(Math.min(...candidates.filter((c) => c.leader).map((c) => c.cost)));
+  });
+});
+
+describe('names over neighbouring polygons', () => {
+  it('sets a name with a leader over an unnamed neighbour rather than over a named one', () => {
+    const square = (x0: number, y0: number, x1: number, y1: number): Point[][] => [[[x0, y0], [x1, y0], [x1, y1], [x0, y1]]];
+    const labels: LabelInput[] = [
+      // Too small for its name, between a named area on its right and an unnamed one on its left.
+      { x: 205, y: 150, width: 60, height: 12, symbol: { type: 'polygon', rings: square(200, 145, 210, 155) }, mode: 'required' },
+      { x: 300, y: 150, width: 60, height: 12, symbol: { type: 'polygon', rings: square(210, 0, 400, 300) } },
+      { x: 100, y: 150, width: 0, height: 0, symbol: { type: 'polygon', rings: square(0, 0, 200, 300) } }
+    ];
+    const [l, named] = placeLabels(labels, { bounds: [0, 0, 400, 300] }).labels;
+    expect(named.placement).toBe('center');
+    expect(l.leader).not.toBeNull();
+    expect(l.box![2]).toBeLessThanOrEqual(200);
+  });
+});

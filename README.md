@@ -86,7 +86,7 @@ The optimizer never hides a label to show one of lower or equal priority, except
 Each movable label tries, in order of cost:
 
 1. `inside` its symbol, when the box fits in it (`inside: false` to disable);
-2. `center` for an `area` symbol, cheaper when the label fits in the inscribed circle, or for a `polygon` symbol, wholly inside it: on the anchor, else shifted on a grid of half label heights, up to four across and three along (0.5 per label height);
+2. `center` for an `area` symbol, cheaper when the label fits in the inscribed circle, or for a `polygon` symbol, wholly inside it: on the anchor, else shifted on a grid of half label heights, up to four across and three along (0.5 per label height), and farther wherever the box fits, found by scanlines a quarter of a label height apart (up to twelve such spots for each layout, a tenth as costly per label height beyond four, so that a label far inside still beats a leader);
 3. the `positions` around the symbol, in order of preference (default: `right`, `top`, `left`, `bottom`, `top-right`, `top-left`, `bottom-right`, `bottom-left`: the practice of the Atelier de cartographie, sides before corners);
 4. the same positions on farther rings, with a leader line (`leader.rings`, default one and two label heights).
 
@@ -104,7 +104,7 @@ Breaking and measuring text needs the fonts, so it stays with the caller. The ca
 - Outside, the positions start where the outline crosses the direction from the anchor. A leader runs into the area up to its anchor: stopped on the outline, it would point at the neighbour across the border as well. Only its length outside costs. Draw a dot at its inner end (`leader[0]`) to read it as "here".
 - Across the outline, a candidate is discarded: a label of a coastal département sits on land or at sea, never on the coastline.
 - Each area first takes a spot inside itself, by priority, before any label is set outside its own area: a département too small for its name must not take the room its neighbour needs. Ejection chains never eject a label from inside its own area.
-- Outside its polygon, a label next to it must not land in, or across, another label's polygon. With a leader it may, at the ambiguity cost: the leader names its feature (small areas, such as the départements around Paris).
+- Outside its polygon, a label next to it must not land in, or across, another label's polygon. With a leader it may, at a cost: the leader names its feature (small areas, such as the départements around Paris). Once the areas have taken their spots inside, that cost is the ambiguity cost twice over the share of the box on an area named inside, half of it on an area whose name went out, a quarter at least: two names in one area read as the wrong one. Leaders of polygon labels reach two rings farther, out to sea or into an unnamed area.
 
 ### Columns
 

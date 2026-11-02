@@ -4,7 +4,7 @@
 3 #3 | hidden obstacles
 4 #4 | top-left:0:0 325.1,240.6
 5 #5 | hidden labels
-6 #6 | top-right:0:0 310.3,194.4
+6 #6 | hidden labels
 7 #7 | pinned:0:0 256.2,252.5
 8 #8 | top:0:1 479.9,160.4
 9 #9 | bottom-right:0:0 387.0,110.5
@@ -36,7 +36,7 @@
 37 #37 | hidden obstacles
 38 #38 | hidden labels
 39 #39 | hidden labels
-40 #40 | bottom-right:0:0 338.8,220.5
+40 #40 | right:0:0 349.7,204.2
 42 #42 | right:0:2 425.7,310.1
 43 #43 | hidden obstacles
 44 #44 | left:0:0 345.2,302.9 overlapping
@@ -55,7 +55,7 @@
 57 #57 | hidden obstacles
 58 #58 | top-left:0:0 426.2,174.5
 59 #59 | hidden obstacles
-60 #60 | hidden labels
+60 #60 | top-left:0:0 260.4,186.5
 61 #61 | hidden labels
 62 #62 | hidden labels
 63 #63 | hidden labels
