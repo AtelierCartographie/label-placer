@@ -13,6 +13,8 @@ const CHAIN_MAX_EJECT = 2;
 /** Weight of a box over a neighbouring polygon, in ambiguity costs: named inside, or its name out of it. */
 const NAMED_NEIGHBOUR = 2;
 const EMPTY_NEIGHBOUR = 0.5;
+/** Cost of a leader running into another polygon, in ambiguity costs, for each one. */
+const CROSSED_AREA = 0.5;
 const CHAIN_DEPTH = 1;
 /** Named anchors closer than this many label heights belong to the same cluster when aligning. */
 const ALIGN_REACH = 4;
@@ -290,7 +292,7 @@ export class Placer {
         const cy = l.y + oy;
         const box: Box = [cx - l.width / 2, cy - l.height / 2, cx + l.width / 2, cy + l.height / 2];
         const lead = leader
-          ? leaderGeometry({ anchor: [l.x, l.y], symbol: l.symbol, box, style: settings.leaderStyle, symbolGap: settings.symbolGap, minGap: settings.minGap })
+          ? leaderGeometry({ anchor: [l.x, l.y], symbol: l.symbol, box, style: settings.leaderStyle, symbolGap: settings.symbolGap, minGap: settings.minGap, polygonInset: unit })
           : null;
         this.feasible.push([makeCandidate(box, 0, 'pinned', 0, flushAlignment([l.x, l.y], box), 'middle', lead)]);
         this.farther.push([]);
@@ -614,7 +616,8 @@ export class Placer {
     for (let i = 0; i < this.labels.length; i++) {
       if (this.labels[i].symbol?.type !== 'polygon' || this.fixed(i)) continue;
       for (const list of [this.feasible[i], this.farther[i], this.blocked[i]]) {
-        for (const c of list) if (c.ring > 0) c.cost += this.ambiguityCost * this.neighbourShare(i, [c.x0, c.y0, c.x1, c.y1]);
+        for (const c of list)
+          if (c.ring > 0) c.cost += this.ambiguityCost * (this.neighbourShare(i, [c.x0, c.y0, c.x1, c.y1]) + CROSSED_AREA * this.areasCrossed(i, c));
         list.sort((a, b) => a.cost - b.cost);
       }
     }
@@ -641,6 +644,29 @@ export class Placer {
       }
     // Across a corner of a neighbour, still a little.
     return Math.max(0.25, share);
+  }
+
+  /** How many other polygons the leader of polygon label i runs across, the box's own aside: the share costs those. */
+  private areasCrossed(i: number, c: Candidate): number {
+    const leader = c.leader;
+    if (!leader) return 0;
+    const box: Box = [c.x0, c.y0, c.x1, c.y1];
+    const crossed = new Set<number>();
+    for (let s = 1; s < leader.length; s++) {
+      const [ax, ay] = leader[s - 1];
+      const [bx, by] = leader[s];
+      const [i0, j0, i1, j1] = this.polygons.range(Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by));
+      for (let j = j0; j <= j1; j++)
+        for (let ii = i0; ii <= i1; ii++)
+          for (const k of this.polygons.cells[j * this.polygons.nx + ii]) {
+            const sym = this.labels[k].symbol;
+            if (k === i || crossed.has(k) || sym?.type !== 'polygon') continue;
+            const [x0, y0, x1, y1] = this.polygonBoxes[k];
+            if (Math.max(ax, bx) < x0 || Math.min(ax, bx) > x1 || Math.max(ay, by) < y0 || Math.min(ay, by) > y1) continue;
+            if (sym.rings.some((r) => r.some((p, e) => segmentsCross(ax, ay, bx, by, ...r[e === 0 ? r.length - 1 : e - 1], ...p))) && boxRelation(box, sym.rings, this.polygonBoxes[k]) === 'outside') crossed.add(k);
+          }
+    }
+    return crossed.size;
   }
 
   /** Whether the box of polygon label i lies in, or across, another label's polygon. */
@@ -1033,7 +1059,7 @@ export class Placer {
             members.slice().sort((a, b) => this.labels[a].y - this.labels[b].y || a - b),
             (o) =>
               this.stack(o, sign, at, s.gap, [by0, by1], 'column', (i, box) =>
-                leaderGeometry({ anchor: [this.labels[i].x, this.labels[i].y], symbol: this.labels[i].symbol, box, style: s.leaderStyle, symbolGap: s.symbolGap, minGap: s.minGap }),
+                leaderGeometry({ anchor: [this.labels[i].x, this.labels[i].y], symbol: this.labels[i].symbol, box, style: s.leaderStyle, symbolGap: s.symbolGap, minGap: s.minGap, polygonInset: s.unit }),
               o.map(size))
           );
       cands.forEach((c, k) => (c.layout = this.current[order[k]]?.layout ?? 0));

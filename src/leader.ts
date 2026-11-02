@@ -14,6 +14,8 @@ export interface LeaderParams {
   style?: LeaderStyle;
   /** Clear space kept between the symbol and the start of the leader. */
   symbolGap?: number;
+  /** Into a polygon, how deep past its outline the leader starts, on its way to the anchor at most. */
+  polygonInset?: number;
   /** No leader while the gap between the symbol and the label stays below this. */
   minGap?: number;
 }
@@ -84,7 +86,7 @@ function diagonalPort([cx, cy]: Point, [hw, hh]: Point): Port | null {
  * Leader polyline from the symbol to the label box, or null when the label covers its
  * anchor or still reads as attached (gap below `minGap`).
  */
-export function leaderGeometry({ anchor, symbol, box, style = 'octilinear', symbolGap = 0, minGap = 0 }: LeaderParams): Point[] | null {
+export function leaderGeometry({ anchor, symbol, box, style = 'octilinear', symbolGap = 0, minGap = 0, polygonInset = Infinity }: LeaderParams): Point[] | null {
   const [center, half] = relative(anchor, box);
   const [cx, cy] = center;
   const [hw, hh] = half;
@@ -100,9 +102,9 @@ export function leaderGeometry({ anchor, symbol, box, style = 'octilinear', symb
   if (!route) return null;
   const { port, end } = route;
   const [px, py] = port;
-  // A leader stops short of a circle or a rect, but runs into a polygon up to its anchor: stopped
-  // on the outline, it would name the neighbour across the border as well.
-  const buffered = (extent: number) => (symbol?.type === 'polygon' ? 0 : extent > 0 ? extent + symbolGap : 0);
+  // A leader stops short of a circle or a rect, but runs well into a polygon: stopped on the
+  // outline, it would name the neighbour across the border as well.
+  const buffered = (extent: number) => (symbol?.type === 'polygon' ? Math.max(0, extent - polygonInset) : extent > 0 ? extent + symbolGap : 0);
   const toAbsolute = (points: Point[]): Point[] => points.map(([x, y]) => [anchor[0] + x, anchor[1] + y]);
 
   const startOn = (tx: number, ty: number): Point | null => {

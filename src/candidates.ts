@@ -84,6 +84,8 @@ for (let dy = -6; dy <= 6; dy++) for (let dx = -8; dx <= 8; dx++) POLYGON_OFFSET
 POLYGON_OFFSETS.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
 /** Cost of moving a label inside its polygon away from its anchor, per label height. */
 const POLYGON_SHIFT_COST = 0.5;
+/** Extra cost of a polygon label's taller layout out of its polygon. */
+const OUTSIDE_TALLER_COST = 2;
 /** Shift beyond which, in label heights, moving further inside the polygon costs a tenth as much. */
 const POLYGON_FAR_SHIFT = 4;
 /** Most slots kept from the scanlines, beyond the grid around the anchor. */
@@ -94,8 +96,10 @@ export function buildCandidates(label: LabelInput, s: CandidateSettings): Candid
   const out = layoutCandidates(label, label.width, label.height, s);
   label.layouts?.forEach((l, k) => {
     if (!(l.width > 0 && l.height > 0)) return;
+    // Broken over more lines to fit in its polygon, a name reads better on one line out of it.
+    const taller = label.symbol?.type === 'polygon' && l.height > label.height ? OUTSIDE_TALLER_COST : 0;
     for (const c of layoutCandidates(label, l.width, l.height, s)) {
-      c.cost += l.cost ?? 0.5;
+      c.cost += (l.cost ?? 0.5) + (c.placement === 'center' ? 0 : taller);
       c.layout = k + 1;
       out.push(c);
     }
@@ -173,7 +177,7 @@ function layoutCandidates(label: LabelInput, w: number, h: number, s: CandidateS
         out.push(makeCandidate(box, rank, position, 0, textAnchor, baseline, null));
         continue;
       }
-      const leader = leaderGeometry({ anchor: [x, y], symbol, box, style: s.leaderStyle, symbolGap: s.symbolGap, minGap: s.minGap });
+      const leader = leaderGeometry({ anchor: [x, y], symbol, box, style: s.leaderStyle, symbolGap: s.symbolGap, minGap: s.minGap, polygonInset: s.unit });
       if (!leader) continue;
       let length = 0;
       for (let i = 1; i < leader.length; i++) length += Math.hypot(leader[i][0] - leader[i - 1][0], leader[i][1] - leader[i - 1][1]);

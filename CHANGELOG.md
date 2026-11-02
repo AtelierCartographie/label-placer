@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `leaderGeometry({ polygonInset })`: into a polygon, the leader starts that far past the outline
+
 ### Changed
 
 - Polygons: beyond the grid around the anchor, a label is also tried wherever its box fits in the polygon, in each of its layouts, found by scanlines; fewer leaders (28 to 23 on the 96 départements)
 - Polygons: a name with a leader keeps off the areas whose own name is inside them, out to sea or into an unnamed area, its leaders reaching two rings farther (names over a named neighbour: 13 to 9 on the Europe demo)
+- Polygons: a leader starts one label height inside the outline rather than at the anchor (a fifth shorter on the départements), costs half the ambiguity cost for each other area it runs across, and a name broken over two lines costs more out of its area
 
 ## [0.3.0] - 2026-11-02
 

@@ -1,4 +1,4 @@
-# Les 96 départements, tous nommés: 96 shown, 0 hidden, 1 overlapping
+# Les 96 départements, tous nommés: 96 shown, 0 hidden, 0 overlapping
 0 Puy-de-Dôme | center:0:0 550.4,410.0
 1 Nord | center:0:0 568.1,76.6
 2 Charente-Maritime | left:0:0 279.5,395.9
@@ -13,9 +13,9 @@
 11 Calvados | center:0:0 379.8,152.2
 12 Yonne | center:0:0 563.4,245.4
 13 Vosges | center:0:0 700.5,218.3
-14 Rhône | right:3:0 694.0,388.3
+14 Rhône | right:1:0 668.0,388.3
 15 Lot-et-Garonne | center:0:1 408.8,496.3
-16 Haute-Garonne | bottom-left:1:0 360.0,634.4
+16 Haute-Garonne | top:1:0 447.1,519.1
 17 Ardèche | center:0:0 609.3,475.8
 18 Manche | top:0:0 334.0,96.1
 19 Alpes-de-Haute-Provence | right:1:0 806.8,509.8
@@ -36,7 +36,7 @@
 34 Corrèze | center:0:0 483.2,421.3
 35 Indre | center:0:0 467.5,320.7
 36 Hauts-de-Seine | right:2:1 553.7,173.7
-37 Essonne | right:2:0 565.8,196.1
+37 Essonne | bottom-left:2:0 450.5,236.3
 38 Pyrénées-Orientales | right:0:0 592.9,625.7
 39 Gers | center:0:0 406.5,546.0
 40 Sarthe | center:0:0 405.7,230.8
@@ -59,9 +59,9 @@
 57 Charente | right:1:0 455.7,402.3
 58 Haute-Marne | center:0:1 647.9,224.4
 59 Ardennes | center:0:0 615.1,123.5
-60 Seine-et-Marne | right:1:0 617.7,190.0 overlapping
+60 Seine-et-Marne | right:1:0 617.7,190.0
 61 Moselle | center:0:0 710.1,156.0
-62 Tarn-et-Garonne | bottom:1:1 455.0,561.1
+62 Tarn-et-Garonne | bottom-left:2:1 393.3,572.6
 63 Loiret | center:0:0 507.6,241.1
 64 Cantal | center:0:0 526.1,449.3
 65 Tarn | center:0:0 500.6,540.7
@@ -92,6 +92,6 @@
 90 Lozère | center:0:0 566.2,486.0
 91 Alpes-Maritimes | bottom-right:0:0 812.6,547.6
 92 Vendée | center:0:0 323.5,325.6
-93 Hautes-Pyrénées | top:2:1 388.9,524.0
+93 Hautes-Pyrénées | bottom:1:0 388.9,637.4
 94 Vaucluse | right:1:0 710.0,524.6
 95 Seine-Maritime | center:0:0 442.6,117.7

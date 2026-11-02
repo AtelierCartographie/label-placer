@@ -101,7 +101,7 @@ Breaking and measuring text needs the fonts, so it stays with the caller. The ca
 `{ type: 'polygon', rings }` gives an area with its outline, in the caller's units, outer ring and holes alike (even-odd rule). Simplify the outlines: every candidate is tested against every edge of its own polygon.
 
 - Inside, the label is centered on its anchor (a pole of inaccessibility is a good one), or shifted on a grid around it, wholly inside.
-- Outside, the positions start where the outline crosses the direction from the anchor. A leader runs into the area up to its anchor: stopped on the outline, it would point at the neighbour across the border as well. Only its length outside costs. Draw a dot at its inner end (`leader[0]`) to read it as "here".
+- Outside, the positions start where the outline crosses the direction from the anchor. A leader runs into the area, one label height past its outline on its way to the anchor (up to the anchor in a smaller area): stopped on the outline, it would point at the neighbour across the border as well. Only its length outside costs, and each other area it runs across, half the ambiguity cost. A name broken over more lines to fit inside costs 2 more out of its area, where one line reads better. Draw a dot at its inner end (`leader[0]`) to read it as "here".
 - Across the outline, a candidate is discarded: a label of a coastal département sits on land or at sea, never on the coastline.
 - Each area first takes a spot inside itself, by priority, before any label is set outside its own area: a département too small for its name must not take the room its neighbour needs. Ejection chains never eject a label from inside its own area.
 - Outside its polygon, a label next to it must not land in, or across, another label's polygon. With a leader it may, at a cost: the leader names its feature (small areas, such as the départements around Paris). Once the areas have taken their spots inside, that cost is the ambiguity cost twice over the share of the box on an area named inside, half of it on an area whose name went out, a quarter at least: two names in one area read as the wrong one. Leaders of polygon labels reach two rings farther, out to sea or into an unnamed area.
@@ -327,7 +327,9 @@ See Zoom levels. `ZoomLevel`: `zoom?`, `labels`, `options`. `ZoomResult`: `level
 
 What to look at in a result: a mark per overlapping label (`overlapping`, its box), per hidden label at its anchor (`blocked`, a cross, when obstacles or the bounds left it no spot; `crowded`, a ring, when other labels took its room) and per label in its way (`by`, a line to its middle). Each `DebugMark` has `kind`, `index`, `d` (SVG path data in your units) and `title` (`Rennes: hidden by Cesson-Sévigné`). Options: `names` (one per label; the ids by default), `size` (half a cross, 0.3 median label heights), and for `debugSVG`, `bounds` for a whole SVG. Labels named by a group's block and symbols without a label get no mark.
 
-### `leaderGeometry({ anchor, symbol?, box, style?, symbolGap?, minGap? }): Point[] | null`
+### `leaderGeometry({ anchor, symbol?, box, style?, symbolGap?, minGap?, polygonInset? }): Point[] | null`
+
+Into a polygon, the leader starts `polygonInset` past the outline on its way to the anchor (the anchor itself by default).
 
 ### `flushAlignment(anchor, box): 'start' | 'middle' | 'end'`
 

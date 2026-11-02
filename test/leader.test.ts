@@ -145,3 +145,17 @@ describe('flushAlignment', () => {
     expect(rounded(leaderGeometry({ anchor: [0, 0], symbol: { type: 'circle', radius: 5 }, box: box([60, 2], [20, 6]), style: 'orthogonal', symbolGap: 2 }))).toEqual([[6.71, 2], [40, 2]]);
   });
 });
+
+describe('polygon leaders', () => {
+  it('start one inset inside the outline, on the way to the anchor', () => {
+    const rings: Point[][] = [[[0, 0], [200, 0], [200, 100], [0, 100]]];
+    const box: Box = [230, 40, 290, 52];
+    const deep = leaderGeometry({ anchor: [100, 50], symbol: { type: 'polygon', rings }, box, style: 'straight' })!;
+    const inset = leaderGeometry({ anchor: [100, 50], symbol: { type: 'polygon', rings }, box, style: 'straight', polygonInset: 12 })!;
+    expect(deep[0]).toEqual([100, 50]);
+    // 12 before the right edge, on the line from the anchor to the port.
+    const [[sx, sy], [px, py]] = inset;
+    expect(Math.hypot(sx - 100, sy - 50) + 12).toBeCloseTo((100 * Math.hypot(px - 100, py - 50)) / (px - 100), 6);
+    expect((sy - 50) * (px - 100)).toBeCloseTo((py - 50) * (sx - 100), 6);
+  });
+});

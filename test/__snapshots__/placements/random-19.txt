@@ -96,7 +96,7 @@
 100 #100 | margin:1:0 169.2,5.5 overlapping
 102 #102 | hidden obstacles
 103 #103 | top-left:0:0 288.6,59.2
-104 #104 | hidden obstacles
+104 #104 | hidden labels
 105 #105 | hidden obstacles
 106 #106 | hidden labels
 107 #107 | hidden labels
