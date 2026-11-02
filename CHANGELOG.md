@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Polygons: a name set next to its area, out of it, gets a short leader into it, one label height past the outline, and costs 2 more than before (4 more again without it, where another leader stands in its way): next to an area it read as a neighbour's as well, above all a neighbour left out of the labels (the grey countries of a thematic map, unknown to the engine). With `leader: false` it has none, and the ambiguity cost at sea applies as before. More names stay inside their area (68 to 72 on the départements at 600 px)
+
 ## [0.4.0] - 2026-11-02
 
 Polygon labels, after tests in Khartis: more names inside their area, fewer leaders, and the

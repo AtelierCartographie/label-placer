@@ -637,7 +637,7 @@ export class Placer {
     const symbol = this.labels[i].symbol;
     if (symbol?.type === 'area' || this.fixed(i)) return list;
     for (const c of list) {
-      if (c.ring > 0 || c.placement === 'inside' || c.placement === 'center') continue;
+      if (c.leader || c.placement === 'inside' || c.placement === 'center') continue;
       const box: Box = [c.x0, c.y0, c.x1, c.y1];
       const own = symbol?.type === 'polygon' ? boxRingsDistance(box, symbol.rings) : undefined;
       let ambiguity = this.features.ambiguity(i, box, this.ambiguityMargin, own);
@@ -658,7 +658,7 @@ export class Placer {
       if (this.labels[i].symbol?.type !== 'polygon' || this.fixed(i)) continue;
       for (const list of [this.feasible[i], this.farther[i], this.blocked[i]]) {
         for (const c of list)
-          if (c.ring > 0) c.cost += this.ambiguityCost * (this.neighbourShare(i, [c.x0, c.y0, c.x1, c.y1]) + CROSSED_AREA * this.areasCrossed(i, c));
+          if (c.leader) c.cost += this.ambiguityCost * (this.neighbourShare(i, [c.x0, c.y0, c.x1, c.y1]) + CROSSED_AREA * this.areasCrossed(i, c));
           else if (c.overflow) c.cost += this.ambiguityCost * this.neighbourShare(i, [c.x0, c.y0, c.x1, c.y1]);
         list.sort((a, b) => a.cost - b.cost);
       }

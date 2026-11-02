@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_POSITIONS, placeLabels } from '../src/index.ts';
 import { segmentsCross } from '../src/geometry.ts';
+import { pointInRings } from '../src/polygon.ts';
 import type { Box, LabelInput, PlacedLabel, PlaceOptions, Point } from '../src/index.ts';
 
 function mulberry32(seed: number) {
@@ -699,14 +700,30 @@ describe('names over neighbouring polygons', () => {
 });
 
 describe('names at sea', () => {
-  it('keeps a name at sea off the border of two areas, nearer its own', () => {
-    const square = (x0: number, y0: number, x1: number, y1: number): Point[][] => [[[x0, y0], [x1, y0], [x1, y1], [x0, y1]]];
-    // Two islands, one above the other; the southern one's anchor close to their border.
-    const labels: LabelInput[] = [
-      { x: 120, y: 120, width: 30, height: 12, symbol: { type: 'polygon', rings: square(100, 100, 140, 140) } },
-      { x: 120, y: 146, width: 70, height: 12, symbol: { type: 'polygon', rings: square(100, 140, 140, 180) }, mode: 'required' }
-    ];
+  const square = (x0: number, y0: number, x1: number, y1: number): Point[][] => [[[x0, y0], [x1, y0], [x1, y1], [x0, y1]]];
+  // Two islands, one above the other; the southern one's anchor close to their border.
+  const labels: LabelInput[] = [
+    { x: 120, y: 120, width: 30, height: 12, symbol: { type: 'polygon', rings: square(100, 100, 140, 140) } },
+    { x: 120, y: 146, width: 70, height: 12, symbol: { type: 'polygon', rings: square(100, 140, 140, 180) }, mode: 'required' }
+  ];
+
+  it('points a name next to its area into it with a short leader', () => {
     const [, south] = placeLabels(labels, { bounds: [0, 0, 300, 300] }).labels;
+    expect(south.placement).not.toBe('center');
+    expect(south.ring).toBe(0);
+    expect(south.leader).not.toBeNull();
+    // From within the southern island, about one label height deep, to the box.
+    const [sx, sy] = south.leader![0];
+    expect(pointInRings(sx, sy, square(100, 140, 140, 180))).toBe(true);
+    const [x0, y0, x1, y1] = south.box!;
+    expect(Math.hypot(Math.max(0, 100 - sx, sx - 140), Math.max(0, 140 - sy, sy - 180))).toBe(0);
+    const end = south.leader!.at(-1)!;
+    expect(end[0] >= x0 - 1e-9 && end[0] <= x1 + 1e-9 && end[1] >= y0 - 1e-9 && end[1] <= y1 + 1e-9).toBe(true);
+    expect(Math.hypot(end[0] - sx, end[1] - sy)).toBeLessThan(2 * 12);
+  });
+
+  it('keeps a name at sea off the border of two areas, nearer its own, without leaders', () => {
+    const [, south] = placeLabels(labels, { bounds: [0, 0, 300, 300], leader: false }).labels;
     expect(south.leader).toBeNull();
     // Nearer its own outline than the northern island's, by half a label height at least.
     const [x0, y0, x1, y1] = south.box!;

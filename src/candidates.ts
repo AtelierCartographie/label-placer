@@ -97,6 +97,10 @@ const OVERFLOW_COST = 6;
 const OUTSIDE_TALLER_COST = 2;
 /** Shift beyond which, in label heights, moving further inside the polygon costs a tenth as much. */
 const POLYGON_FAR_SHIFT = 4;
+/** Extra cost of a polygon label next to its area, with the short leader into it: in the area reads better. */
+const TICK_COST = 2;
+/** And more again without it, where another leader stands in its way: better than far off on a leader. */
+const NO_TICK_COST = 4;
 /** Most slots kept from the scanlines, beyond the grid around the anchor. */
 const POLYGON_SLOTS = 12;
 
@@ -203,7 +207,10 @@ function layoutCandidates(label: LabelInput, w: number, h: number, s: CandidateS
       const baseline = dy > 0 ? 'top' : dy < 0 ? 'bottom' : 'middle';
       const rank = symbol?.type === 'area' || symbol?.type === 'polygon' ? p + 1 : p;
       if (ring === 0) {
-        out.push(makeCandidate(box, rank, position, 0, textAnchor, baseline, null));
+        // Next to an area, a name reads as its neighbour's as well: a short leader into it tells which.
+        const tick = symbol?.type === 'polygon' && rings.length > 1 ? leaderGeometry({ anchor: [x, y], symbol, box, style: s.leaderStyle, polygonInset: s.unit }) : null;
+        if (tick) out.push(makeCandidate(box, rank + TICK_COST, position, 0, textAnchor, baseline, tick));
+        out.push(makeCandidate(box, rank + (tick ? TICK_COST + NO_TICK_COST : 0), position, 0, textAnchor, baseline, null));
         continue;
       }
       const leader = leaderGeometry({ anchor: [x, y], symbol, box, style: s.leaderStyle, symbolGap: s.symbolGap, minGap: s.minGap, polygonInset: s.unit });

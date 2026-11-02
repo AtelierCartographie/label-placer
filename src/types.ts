@@ -212,7 +212,7 @@ export interface PlacedLabel {
   id: string | number | undefined;
   visible: boolean;
   placement: Placement | null;
-  /** 0 next to the symbol, n for the n-th leader ring. */
+  /** 0 next to the symbol (out of its polygon, with a short leader into it), n for the n-th leader ring. */
   ring: number;
   /** Which layout won: 0 for the label's `width` × `height`, k for `layouts[k - 1]`. */
   layout: number;
